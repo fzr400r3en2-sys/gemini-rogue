@@ -1,8 +1,8 @@
 {
   "summary": {
-    "total_files": 41,
-    "total_folders": 16,
-    "total_size": 88546,
+    "total_files": 54,
+    "total_folders": 23,
+    "total_size": 225606,
     "top_n": 10,
     "max_depth": null,
     "min_size": 1024,
@@ -16,19 +16,19 @@
     ],
     [
       ".py",
-      13
+      14
     ],
     [
       ".html",
-      4
+      8
     ],
     [
       ".md",
-      4
+      8
     ],
     [
       ".json",
-      3
+      7
     ],
     [
       "",
@@ -41,20 +41,20 @@
   ],
   "extensions_size": [
     [
-      ".py",
-      45169
-    ],
-    [
       ".html",
-      22628
+      84612
     ],
     [
-      ".md",
-      9535
+      ".py",
+      52451
     ],
     [
       ".json",
-      7783
+      49826
+    ],
+    [
+      ".md",
+      35286
     ],
     [
       "",
@@ -72,96 +72,96 @@
   "years_count": [
     [
       2026,
-      41
+      54
     ]
   ],
   "top_large": [
     {
-      "path": "src\\folder_archaeologist\\report.py",
-      "size": 15737,
-      "mtime": 1778344207.865012,
-      "extension": ".py",
-      "depth": 2,
-      "is_accessible": true,
-      "sha256_hash": null
-    },
-    {
-      "path": "report.html",
-      "size": 6572,
-      "mtime": 1778344303.8291893,
+      "path": "reports_test\\report.html",
+      "size": 20657,
+      "mtime": 1778344926.9428306,
       "extension": ".html",
-      "depth": 0,
-      "is_accessible": true,
-      "sha256_hash": null
-    },
-    {
-      "path": "tests\\test_new_features.py",
-      "size": 6400,
-      "mtime": 1778344335.1907234,
-      "extension": ".py",
       "depth": 1,
       "is_accessible": true,
       "sha256_hash": null
     },
     {
-      "path": "pytest_tmp\\test_html_localization0\\report.html",
-      "size": 5781,
-      "mtime": 1778344340.09438,
-      "extension": ".html",
-      "depth": 2,
-      "is_accessible": true,
-      "sha256_hash": null
-    },
-    {
-      "path": "report.json",
-      "size": 5759,
-      "mtime": 1778344303.8286605,
+      "path": "desktop_report.json",
+      "size": 19104,
+      "mtime": 1778344558.2650964,
       "extension": ".json",
       "depth": 0,
       "is_accessible": true,
       "sha256_hash": null
     },
     {
-      "path": "depth_report.html",
-      "size": 5242,
-      "mtime": 1778344436.5844407,
+      "path": "src\\folder_archaeologist\\report.py",
+      "size": 17762,
+      "mtime": 1778344839.2429879,
+      "extension": ".py",
+      "depth": 2,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "desktop_report.html",
+      "size": 17527,
+      "mtime": 1778344558.2656243,
       "extension": ".html",
       "depth": 0,
       "is_accessible": true,
       "sha256_hash": null
     },
     {
-      "path": "README.md",
-      "size": 5204,
-      "mtime": 1778344297.2327292,
+      "path": "reports_test\\report.json",
+      "size": 15730,
+      "mtime": 1778344926.939186,
+      "extension": ".json",
+      "depth": 1,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "reports_test2\\report.html",
+      "size": 11797,
+      "mtime": 1778344932.4228103,
+      "extension": ".html",
+      "depth": 1,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "desktop_report.md",
+      "size": 11623,
+      "mtime": 1778344558.2645917,
       "extension": ".md",
       "depth": 0,
       "is_accessible": true,
       "sha256_hash": null
     },
     {
-      "path": "src\\folder_archaeologist\\cli.py",
-      "size": 5168,
-      "mtime": 1778344158.4150488,
-      "extension": ".py",
-      "depth": 2,
+      "path": "reports_test\\report.md",
+      "size": 8714,
+      "mtime": 1778344926.939186,
+      "extension": ".md",
+      "depth": 1,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "depth_reports_test\\report.html",
+      "size": 8215,
+      "mtime": 1778344938.1722035,
+      "extension": ".html",
+      "depth": 1,
       "is_accessible": true,
       "sha256_hash": null
     },
     {
       "path": "pytest_tmp\\test_depth_summary_html0\\report.html",
-      "size": 5033,
-      "mtime": 1778344339.9845774,
+      "size": 7493,
+      "mtime": 1778344912.4672382,
       "extension": ".html",
-      "depth": 2,
-      "is_accessible": true,
-      "sha256_hash": null
-    },
-    {
-      "path": "src\\folder_archaeologist\\analyzer.py",
-      "size": 4606,
-      "mtime": 1778344133.0977864,
-      "extension": ".py",
       "depth": 2,
       "is_accessible": true,
       "sha256_hash": null
@@ -214,24 +214,6 @@
       "sha256_hash": null
     },
     {
-      "path": "src\\folder_archaeologist\\cli.py",
-      "size": 5168,
-      "mtime": 1778344158.4150488,
-      "extension": ".py",
-      "depth": 2,
-      "is_accessible": true,
-      "sha256_hash": null
-    },
-    {
-      "path": "src\\folder_archaeologist\\report.py",
-      "size": 15737,
-      "mtime": 1778344207.865012,
-      "extension": ".py",
-      "depth": 2,
-      "is_accessible": true,
-      "sha256_hash": null
-    },
-    {
       "path": "src\\folder_archaeologist\\scanner.py",
       "size": 3941,
       "mtime": 1778344250.7338502,
@@ -250,16 +232,38 @@
       "sha256_hash": null
     },
     {
-      "path": "README.md",
-      "size": 5204,
-      "mtime": 1778344297.2327292,
-      "extension": ".md",
+      "path": "tests\\test_new_features.py",
+      "size": 6400,
+      "mtime": 1778344335.1907234,
+      "extension": ".py",
+      "depth": 1,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "depth_report.json",
+      "size": 1072,
+      "mtime": 1778344436.5836384,
+      "extension": ".json",
+      "depth": 0,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "depth_report.html",
+      "size": 5242,
+      "mtime": 1778344436.5844407,
+      "extension": ".html",
       "depth": 0,
       "is_accessible": true,
       "sha256_hash": null
     }
   ],
   "empty_folders": [
+    "pytest_tmp\\test_html_graphs_content0",
+    "pytest_tmp\\test_open_report_mocked0",
+    "pytest_tmp\\test_output_dir_default0",
+    "pytest_tmp\\test_output_dir_with_relative_0",
     "tests\\fixtures"
   ],
   "duplicate_candidates": {},

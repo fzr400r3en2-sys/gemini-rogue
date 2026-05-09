@@ -1,10 +1,10 @@
 # フォルダ解析レポート
-生成日時: 2026-05-10 01:33:57
+生成日時: 2026-05-10 01:42:23
 
 ## 概要
-- 総ファイル数: 41
-- 総フォルダ数: 16
-- 総サイズ: 86.47 KB
+- 総ファイル数: 54
+- 総フォルダ数: 23
+- 総サイズ: 220.32 KB
 
 ## 実行条件
 - **Top-N**: 10
@@ -28,20 +28,20 @@
 | 拡張子 | カウント |
 | --- | --- |
 | .txt | 14 |
-| .py | 13 |
-| .html | 4 |
-| .md | 4 |
-| .json | 3 |
+| .py | 14 |
+| .html | 8 |
+| .md | 8 |
+| .json | 7 |
 | (拡張子なし) | 2 |
 | .toml | 1 |
 
 ## 拡張子別サイズランキング (Top 10)
 | 拡張子 | サイズ |
 | --- | --- |
-| .py | 44.11 KB |
-| .html | 22.10 KB |
-| .md | 9.31 KB |
-| .json | 7.60 KB |
+| .html | 82.63 KB |
+| .py | 51.22 KB |
+| .json | 48.66 KB |
+| .md | 34.46 KB |
 | (拡張子なし) | 2.14 KB |
 | .txt | 783.00 B |
 | .toml | 455.00 B |
@@ -49,21 +49,21 @@
 ## 年別ファイル数
 | 年 | カウント |
 | --- | --- |
-| 2026 | 41 |
+| 2026 | 54 |
 
 ## 大容量ファイル (Top 10)
 | ファイルパス | サイズ | 最終更新日時 |
 | --- | --- | --- |
-| src\folder_archaeologist\report.py | 15.37 KB | 2026-05-10 01:30:07 |
-| report.html | 6.42 KB | 2026-05-10 01:31:43 |
-| tests\test_new_features.py | 6.25 KB | 2026-05-10 01:32:15 |
-| pytest_tmp\test_html_localization0\report.html | 5.65 KB | 2026-05-10 01:32:20 |
-| report.json | 5.62 KB | 2026-05-10 01:31:43 |
-| depth_report.html | 5.12 KB | 2026-05-10 01:33:56 |
-| README.md | 5.08 KB | 2026-05-10 01:31:37 |
-| src\folder_archaeologist\cli.py | 5.05 KB | 2026-05-10 01:29:18 |
-| pytest_tmp\test_depth_summary_html0\report.html | 4.92 KB | 2026-05-10 01:32:19 |
-| src\folder_archaeologist\analyzer.py | 4.50 KB | 2026-05-10 01:28:53 |
+| reports_test\report.html | 20.17 KB | 2026-05-10 01:42:06 |
+| desktop_report.json | 18.66 KB | 2026-05-10 01:35:58 |
+| src\folder_archaeologist\report.py | 17.35 KB | 2026-05-10 01:40:39 |
+| desktop_report.html | 17.12 KB | 2026-05-10 01:35:58 |
+| reports_test\report.json | 15.36 KB | 2026-05-10 01:42:06 |
+| reports_test2\report.html | 11.52 KB | 2026-05-10 01:42:12 |
+| desktop_report.md | 11.35 KB | 2026-05-10 01:35:58 |
+| reports_test\report.md | 8.51 KB | 2026-05-10 01:42:06 |
+| depth_reports_test\report.html | 8.02 KB | 2026-05-10 01:42:18 |
+| pytest_tmp\test_depth_summary_html0\report.html | 7.32 KB | 2026-05-10 01:41:52 |
 
 ## 長期間更新されていないファイル (Top 10)
 | ファイルパス | サイズ | 最終更新日時 |
@@ -73,15 +73,19 @@
 | tests\test_excludes.py | 2.34 KB | 2026-05-10 01:05:27 |
 | tests\test_validation.py | 1.12 KB | 2026-05-10 01:12:09 |
 | src\folder_archaeologist\analyzer.py | 4.50 KB | 2026-05-10 01:28:53 |
-| src\folder_archaeologist\cli.py | 5.05 KB | 2026-05-10 01:29:18 |
-| src\folder_archaeologist\report.py | 15.37 KB | 2026-05-10 01:30:07 |
 | src\folder_archaeologist\scanner.py | 3.85 KB | 2026-05-10 01:30:50 |
 | tests\test_final.py | 2.62 KB | 2026-05-10 01:31:16 |
-| README.md | 5.08 KB | 2026-05-10 01:31:37 |
+| tests\test_new_features.py | 6.25 KB | 2026-05-10 01:32:15 |
+| depth_report.json | 1.05 KB | 2026-05-10 01:33:56 |
+| depth_report.html | 5.12 KB | 2026-05-10 01:33:56 |
 
 ## 重複候補 (Top 10 サイズ順)
 | ファイル名 & サイズ | パス |
 | --- | --- |
 
 ## 空フォルダ候補
+- pytest_tmp\test_html_graphs_content0
+- pytest_tmp\test_open_report_mocked0
+- pytest_tmp\test_output_dir_default0
+- pytest_tmp\test_output_dir_with_relative_0
 - tests\fixtures

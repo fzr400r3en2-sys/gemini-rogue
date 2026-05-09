@@ -1,0 +1,627 @@
+{
+  "summary": {
+    "total_files": 5438,
+    "total_folders": 50,
+    "total_size": 6622008205,
+    "top_n": 20,
+    "max_depth": null,
+    "min_size": 1024,
+    "hash_duplicates": false,
+    "depth_summary_max": null
+  },
+  "extensions_count": [
+    [
+      ".jpg",
+      5259
+    ],
+    [
+      ".jpeg",
+      85
+    ],
+    [
+      ".txt",
+      20
+    ],
+    [
+      ".dll",
+      12
+    ],
+    [
+      ".lnk",
+      7
+    ],
+    [
+      ".cfg",
+      7
+    ],
+    [
+      ".rar",
+      6
+    ],
+    [
+      ".url",
+      5
+    ],
+    [
+      ".py",
+      5
+    ],
+    [
+      ".exe",
+      4
+    ],
+    [
+      ".bat",
+      3
+    ],
+    [
+      ".zip",
+      3
+    ],
+    [
+      ".pdf",
+      3
+    ],
+    [
+      ".md",
+      3
+    ],
+    [
+      ".png",
+      2
+    ],
+    [
+      ".ps1",
+      2
+    ],
+    [
+      "",
+      2
+    ],
+    [
+      ".yml",
+      2
+    ],
+    [
+      ".ini",
+      1
+    ],
+    [
+      ".db",
+      1
+    ]
+  ],
+  "extensions_size": [
+    [
+      ".jpg",
+      4501694398
+    ],
+    [
+      ".rar",
+      1745846169
+    ],
+    [
+      ".gz",
+      271447864
+    ],
+    [
+      ".jpeg",
+      34285150
+    ],
+    [
+      ".zip",
+      27162921
+    ],
+    [
+      ".exe",
+      20172156
+    ],
+    [
+      ".png",
+      8684344
+    ],
+    [
+      ".dll",
+      7287728
+    ],
+    [
+      ".pdf",
+      4581203
+    ],
+    [
+      ".pem",
+      222172
+    ],
+    [
+      ".txt",
+      160820
+    ],
+    [
+      ".json",
+      121917
+    ],
+    [
+      ".cfg",
+      92127
+    ],
+    [
+      ".py",
+      65888
+    ],
+    [
+      ".db",
+      53248
+    ],
+    [
+      ".chm",
+      46447
+    ],
+    [
+      ".html",
+      26778
+    ],
+    [
+      ".md",
+      16922
+    ],
+    [
+      ".lnk",
+      13782
+    ],
+    [
+      "",
+      12414
+    ]
+  ],
+  "years_count": [
+    [
+      2026,
+      37
+    ],
+    [
+      2025,
+      185
+    ],
+    [
+      2024,
+      197
+    ],
+    [
+      2023,
+      1893
+    ],
+    [
+      2022,
+      3043
+    ],
+    [
+      2021,
+      83
+    ]
+  ],
+  "top_large": [
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\ShangriLa_Frontier_v01-09b.rar",
+      "size": 973679734,
+      "mtime": 1708482322.8917503,
+      "extension": ".rar",
+      "depth": 0,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\katago-go-app\\katago\\kata1-zhizi-b28c512nbt-muonfd2.bin.gz",
+      "size": 271447864,
+      "mtime": 1775125234.8511882,
+      "extension": ".gz",
+      "depth": 2,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\ShangriLa_Frontier_v13-14.rar",
+      "size": 250674417,
+      "mtime": 1708497013.3237588,
+      "extension": ".rar",
+      "depth": 0,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\ShangriLa_Frontier_v12.rar",
+      "size": 160328823,
+      "mtime": 1708486194.5714128,
+      "extension": ".rar",
+      "depth": 0,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\ShangriLa_Frontier_v10.rar",
+      "size": 134020801,
+      "mtime": 1708397576.2220175,
+      "extension": ".rar",
+      "depth": 0,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\ShangriLa_Frontier_v11.rar",
+      "size": 129386596,
+      "mtime": 1708485794.3661008,
+      "extension": ".rar",
+      "depth": 0,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\ShangriLa_Frontier_v16A.rar",
+      "size": 97755798,
+      "mtime": 1708495663.1583526,
+      "extension": ".rar",
+      "depth": 0,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\Fluffy Mod Manager-14-3-020-1698963636.zip",
+      "size": 22179302,
+      "mtime": 1738807093.0362484,
+      "extension": ".zip",
+      "depth": 0,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\tutu0719\\240719-46.jpg",
+      "size": 17841726,
+      "mtime": 1724142865.9481273,
+      "extension": ".jpg",
+      "depth": 1,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\tutu0719\\240719-44.jpg",
+      "size": 17209645,
+      "mtime": 1724142866.341007,
+      "extension": ".jpg",
+      "depth": 1,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\tutu0719\\240719-47.jpg",
+      "size": 16949792,
+      "mtime": 1724142865.5351343,
+      "extension": ".jpg",
+      "depth": 1,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\tutu0719\\240719-48.jpg",
+      "size": 16321409,
+      "mtime": 1724142871.346397,
+      "extension": ".jpg",
+      "depth": 1,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\tutu0719\\240719-65.jpg",
+      "size": 16276696,
+      "mtime": 1724142870.7591846,
+      "extension": ".jpg",
+      "depth": 1,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\tutu0719\\240719-67.jpg",
+      "size": 15854604,
+      "mtime": 1724142870.522549,
+      "extension": ".jpg",
+      "depth": 1,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\tutu0719\\240719-58.jpg",
+      "size": 15829778,
+      "mtime": 1724142871.1120677,
+      "extension": ".jpg",
+      "depth": 1,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\tutu0719\\240719-79.jpg",
+      "size": 15798828,
+      "mtime": 1724142866.6052341,
+      "extension": ".jpg",
+      "depth": 1,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\tutu0719\\240719-49.jpg",
+      "size": 15523376,
+      "mtime": 1724142871.5766275,
+      "extension": ".jpg",
+      "depth": 1,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\tutu0719\\240719-50.jpg",
+      "size": 15495753,
+      "mtime": 1724142866.2394593,
+      "extension": ".jpg",
+      "depth": 1,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\tutu0719\\240719-76.jpg",
+      "size": 15427638,
+      "mtime": 1724142872.1421974,
+      "extension": ".jpg",
+      "depth": 1,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\tutu0719\\240719-64.jpg",
+      "size": 15097543,
+      "mtime": 1724142870.9566295,
+      "extension": ".jpg",
+      "depth": 1,
+      "is_accessible": true,
+      "sha256_hash": null
+    }
+  ],
+  "top_old": [
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\Ore no Shibo Furagu ga v03-05\\[泉×乙須ミツヤ] 俺の死亡フラグが留まるところを知らない 第03巻w\\Net-01.jpeg",
+      "size": 196093,
+      "mtime": 1622164830.0,
+      "extension": ".jpeg",
+      "depth": 2,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\Ore no Shibo Furagu ga v03-05\\[泉×乙須ミツヤ] 俺の死亡フラグが留まるところを知らない 第03巻w\\Net-02.jpeg",
+      "size": 303082,
+      "mtime": 1622164830.0,
+      "extension": ".jpeg",
+      "depth": 2,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\Ore no Shibo Furagu ga v03-05\\[泉×乙須ミツヤ] 俺の死亡フラグが留まるところを知らない 第03巻w\\Net-03.jpeg",
+      "size": 266690,
+      "mtime": 1622164830.0,
+      "extension": ".jpeg",
+      "depth": 2,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\Ore no Shibo Furagu ga v03-05\\[泉×乙須ミツヤ] 俺の死亡フラグが留まるところを知らない 第03巻w\\Net-04.jpeg",
+      "size": 353462,
+      "mtime": 1622164831.0,
+      "extension": ".jpeg",
+      "depth": 2,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\Ore no Shibo Furagu ga v03-05\\[泉×乙須ミツヤ] 俺の死亡フラグが留まるところを知らない 第03巻w\\Net-05.jpeg",
+      "size": 323388,
+      "mtime": 1622164831.0,
+      "extension": ".jpeg",
+      "depth": 2,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\Ore no Shibo Furagu ga v03-05\\[泉×乙須ミツヤ] 俺の死亡フラグが留まるところを知らない 第03巻w\\Net-06.jpeg",
+      "size": 318467,
+      "mtime": 1622164832.0,
+      "extension": ".jpeg",
+      "depth": 2,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\Ore no Shibo Furagu ga v03-05\\[泉×乙須ミツヤ] 俺の死亡フラグが留まるところを知らない 第03巻w\\Net-07.jpeg",
+      "size": 364375,
+      "mtime": 1622164832.0,
+      "extension": ".jpeg",
+      "depth": 2,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\Ore no Shibo Furagu ga v03-05\\[泉×乙須ミツヤ] 俺の死亡フラグが留まるところを知らない 第03巻w\\Net-08.jpeg",
+      "size": 333533,
+      "mtime": 1622164833.0,
+      "extension": ".jpeg",
+      "depth": 2,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\Ore no Shibo Furagu ga v03-05\\[泉×乙須ミツヤ] 俺の死亡フラグが留まるところを知らない 第03巻w\\Net-09.jpeg",
+      "size": 343777,
+      "mtime": 1622164833.0,
+      "extension": ".jpeg",
+      "depth": 2,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\Ore no Shibo Furagu ga v03-05\\[泉×乙須ミツヤ] 俺の死亡フラグが留まるところを知らない 第03巻w\\Net-010.jpeg",
+      "size": 267864,
+      "mtime": 1622164834.0,
+      "extension": ".jpeg",
+      "depth": 2,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\Ore no Shibo Furagu ga v03-05\\[泉×乙須ミツヤ] 俺の死亡フラグが留まるところを知らない 第03巻w\\Net-011.jpeg",
+      "size": 300731,
+      "mtime": 1622164835.0,
+      "extension": ".jpeg",
+      "depth": 2,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\Ore no Shibo Furagu ga v03-05\\[泉×乙須ミツヤ] 俺の死亡フラグが留まるところを知らない 第03巻w\\Net-012.jpeg",
+      "size": 372185,
+      "mtime": 1622164835.0,
+      "extension": ".jpeg",
+      "depth": 2,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\Ore no Shibo Furagu ga v03-05\\[泉×乙須ミツヤ] 俺の死亡フラグが留まるところを知らない 第03巻w\\Net-013.jpeg",
+      "size": 313181,
+      "mtime": 1622164836.0,
+      "extension": ".jpeg",
+      "depth": 2,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\Ore no Shibo Furagu ga v03-05\\[泉×乙須ミツヤ] 俺の死亡フラグが留まるところを知らない 第03巻w\\Net-014.jpeg",
+      "size": 311220,
+      "mtime": 1622164837.0,
+      "extension": ".jpeg",
+      "depth": 2,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\Ore no Shibo Furagu ga v03-05\\[泉×乙須ミツヤ] 俺の死亡フラグが留まるところを知らない 第03巻w\\Net-015.jpeg",
+      "size": 302002,
+      "mtime": 1622164837.0,
+      "extension": ".jpeg",
+      "depth": 2,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\Ore no Shibo Furagu ga v03-05\\[泉×乙須ミツヤ] 俺の死亡フラグが留まるところを知らない 第03巻w\\Net-016.jpeg",
+      "size": 342137,
+      "mtime": 1622164838.0,
+      "extension": ".jpeg",
+      "depth": 2,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\Ore no Shibo Furagu ga v03-05\\[泉×乙須ミツヤ] 俺の死亡フラグが留まるところを知らない 第03巻w\\Net-017.jpeg",
+      "size": 270660,
+      "mtime": 1622164839.0,
+      "extension": ".jpeg",
+      "depth": 2,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\Ore no Shibo Furagu ga v03-05\\[泉×乙須ミツヤ] 俺の死亡フラグが留まるところを知らない 第03巻w\\Net-018.jpeg",
+      "size": 307835,
+      "mtime": 1622164840.0,
+      "extension": ".jpeg",
+      "depth": 2,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\Ore no Shibo Furagu ga v03-05\\[泉×乙須ミツヤ] 俺の死亡フラグが留まるところを知らない 第03巻w\\Net-019.jpeg",
+      "size": 364923,
+      "mtime": 1622164841.0,
+      "extension": ".jpeg",
+      "depth": 2,
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "C:\\Users\\淳一\\Desktop\\Ore no Shibo Furagu ga v03-05\\[泉×乙須ミツヤ] 俺の死亡フラグが留まるところを知らない 第03巻w\\Net-020.jpeg",
+      "size": 341172,
+      "mtime": 1622164841.0,
+      "extension": ".jpeg",
+      "depth": 2,
+      "is_accessible": true,
+      "sha256_hash": null
+    }
+  ],
+  "empty_folders": [
+    "C:\\Users\\淳一\\Desktop\\Ore no Shibo Furagu ga v01-03s\\Ore_no_Shibou_Flag_ga_Todomaru_01s",
+    "C:\\Users\\淳一\\Desktop\\Ore no Shibo Furagu ga v01-03s\\Ore_no_Shibou_Flag_ga_Todomaru_02s",
+    "C:\\Users\\淳一\\Desktop\\Ore no Shibo Furagu ga v01-03s\\Ore_no_Shibou_Flag_ga_Todomaru_03s"
+  ],
+  "duplicate_candidates": {
+    "804868_00118.jpg": [
+      "C:\\Users\\淳一\\Desktop\\ShangriLa_Frontier\\ShangriLa_Frontier_v11\\00118.jpg",
+      "C:\\Users\\淳一\\Desktop\\Tsuiho_sareta_tensei_jukishi\\Tsuiho sareta tensei jukishi wa v04\\00118.jpg"
+    ],
+    "309796_00078.jpg": [
+      "C:\\Users\\淳一\\Desktop\\Ore_no_Shibo_Furagu_ga_v06-07\\[泉×乙須ミツヤ] 俺の死亡フラグが留まるところを知らない 第06巻\\00078.jpg",
+      "C:\\Users\\淳一\\Desktop\\Ore_no_Shibo_Furagu_ga_v06-07\\[泉×乙須ミツヤ] 俺の死亡フラグが留まるところを知らない 第07巻\\00078.jpg"
+    ],
+    "78603_00228.jpg": [
+      "C:\\Users\\淳一\\Desktop\\ShangriLa_Frontier\\ShangriLa_Frontier_v11\\00228.jpg",
+      "C:\\Users\\淳一\\Desktop\\ShangriLa_Frontier\\[硬梨菜×不二涼介] シャングリラ・フロンティア ～クソゲーハンター、神ゲーに挑まんとす～ 第09巻\\00228.jpg"
+    ],
+    "61944_00237.jpg": [
+      "C:\\Users\\淳一\\Desktop\\ShangriLa_Frontier\\[硬梨菜×不二涼介] シャングリラ・フロンティア 第13巻b\\00237.jpg",
+      "C:\\Users\\淳一\\Desktop\\ShangriLa_Frontier\\[硬梨菜×不二涼介] シャングリラ・フロンティア 第14巻b\\00237.jpg"
+    ],
+    "61942_00237.jpg": [
+      "C:\\Users\\淳一\\Desktop\\ShangriLa_Frontier\\ShangriLa_Frontier_v11\\00237.jpg",
+      "C:\\Users\\淳一\\Desktop\\ShangriLa_Frontier\\[硬梨菜×不二涼介] シャングリラ・フロンティア ～クソゲーハンター、神ゲーに挑まんとす～ 第09巻\\00237.jpg"
+    ],
+    "29027_00002.jpg": [
+      "C:\\Users\\淳一\\Desktop\\ShangriLa_Frontier\\ShangriLa Frontier v10\\00002.jpg",
+      "C:\\Users\\淳一\\Desktop\\ShangriLa_Frontier\\ShangriLa_Frontier_v11\\00002.jpg",
+      "C:\\Users\\淳一\\Desktop\\ShangriLa_Frontier\\[硬梨菜×不二涼介] シャングリラ・フロンティア 第13巻b\\00002.jpg",
+      "C:\\Users\\淳一\\Desktop\\ShangriLa_Frontier\\[硬梨菜×不二涼介] シャングリラ・フロンティア 第14巻b\\00002.jpg",
+      "C:\\Users\\淳一\\Desktop\\ShangriLa_Frontier\\[硬梨菜×不二涼介] シャングリラ・フロンティア ～クソゲーハンター、神ゲーに挑まんとす～ 第01巻\\00002.jpg",
+      "C:\\Users\\淳一\\Desktop\\ShangriLa_Frontier\\[硬梨菜×不二涼介] シャングリラ・フロンティア ～クソゲーハンター、神ゲーに挑まんとす～ 第02巻\\00002.jpg",
+      "C:\\Users\\淳一\\Desktop\\ShangriLa_Frontier\\[硬梨菜×不二涼介] シャングリラ・フロンティア ～クソゲーハンター、神ゲーに挑まんとす～ 第03巻\\00002.jpg",
+      "C:\\Users\\淳一\\Desktop\\ShangriLa_Frontier\\[硬梨菜×不二涼介] シャングリラ・フロンティア ～クソゲーハンター、神ゲーに挑まんとす～ 第04巻\\00002.jpg",
+      "C:\\Users\\淳一\\Desktop\\ShangriLa_Frontier\\[硬梨菜×不二涼介] シャングリラ・フロンティア ～クソゲーハンター、神ゲーに挑まんとす～ 第05巻\\00002.jpg",
+      "C:\\Users\\淳一\\Desktop\\ShangriLa_Frontier\\[硬梨菜×不二涼介] シャングリラ・フロンティア ～クソゲーハンター、神ゲーに挑まんとす～ 第06巻\\00002.jpg",
+      "C:\\Users\\淳一\\Desktop\\ShangriLa_Frontier\\[硬梨菜×不二涼介] シャングリラ・フロンティア ～クソゲーハンター、神ゲーに挑まんとす～ 第07巻\\00002.jpg",
+      "C:\\Users\\淳一\\Desktop\\ShangriLa_Frontier\\[硬梨菜×不二涼介] シャングリラ・フロンティア ～クソゲーハンター、神ゲーに挑まんとす～ 第08巻\\00002.jpg",
+      "C:\\Users\\淳一\\Desktop\\ShangriLa_Frontier\\[硬梨菜×不二涼介] シャングリラ・フロンティア ～クソゲーハンター、神ゲーに挑まんとす～ 第09巻\\00002.jpg"
+    ]
+  },
+  "errors": [],
+  "excludes": [
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".pytest_cache",
+    "node_modules",
+    "dist",
+    "build"
+  ],
+  "settings": {
+    "top_n": 20,
+    "max_depth": 2,
+    "min_size": 1024,
+    "hash_duplicates": false,
+    "depth_summary": false,
+    "depth_summary_max": null
+  }
+}

@@ -193,23 +193,55 @@ class Reporter:
         is_hash = settings.get('hash_duplicates', False)
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
+        def get_bar_html(value, max_value, color="#4a90e2", label=""):
+            percentage = (value / max_value * 100) if max_value > 0 else 0
+            return f"""
+            <div class="bar-container">
+                <div class="bar" style="width: {percentage}%; background-color: {color};"></div>
+                <span class="bar-label">{label}</span>
+            </div>
+            """
+
         depth_summary_html = ""
         if 'depth_summary' in self.analysis:
+            depth_data = self.analysis['depth_summary']
+            max_files = max((ds['files'] for ds in depth_data), default=0)
+            max_size = max((ds['size'] for ds in depth_data), default=0)
+            
             rows = "".join(f"""
                 <tr>
                     <td>{ds['depth']}</td>
-                    <td>{ds['files']}</td>
+                    <td>{ds['files']} {get_bar_html(ds['files'], max_files, "#6c757d")}</td>
                     <td>{ds['folders']}</td>
-                    <td>{format_size(ds['size'])}</td>
+                    <td>{format_size(ds['size'])} {get_bar_html(ds['size'], max_size, "#17a2b8")}</td>
                 </tr>
-            """ for ds in self.analysis['depth_summary'])
+            """ for ds in depth_data)
             depth_summary_html = f"""
             <h2>階層別サマリー</h2>
             <table>
-                <tr><th>階層 (depth)</th><th>ファイル数</th><th>フォルダ数</th><th>合計サイズ</th></tr>
+                <tr><th style="width: 80px;">階層</th><th>ファイル数</th><th style="width: 100px;">フォルダ数</th><th>合計サイズ</th></tr>
                 {rows}
             </table>
             """
+
+        # Extension Charts
+        ext_count_data = self.analysis.get('extensions_count', [])
+        max_ext_count = max((count for ext, count in ext_count_data), default=0)
+        ext_count_rows = "".join(f"""
+            <tr>
+                <td>{html.escape(ext) or '(拡張子なし)'}</td>
+                <td>{count} {get_bar_html(count, max_ext_count, "#4a90e2")}</td>
+            </tr>
+        """ for ext, count in ext_count_data)
+
+        ext_size_data = self.analysis.get('extensions_size', [])
+        max_ext_size = max((size for ext, size in ext_size_data), default=0)
+        ext_size_rows = "".join(f"""
+            <tr>
+                <td>{html.escape(ext) or '(拡張子なし)'}</td>
+                <td>{format_size(size)} {get_bar_html(size, max_ext_size, "#28a745")}</td>
+            </tr>
+        """ for ext, size in ext_size_data)
 
         html_content = f"""<!DOCTYPE html>
 <html lang="ja">
@@ -220,8 +252,8 @@ class Reporter:
     <style>
         body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans JP", sans-serif; line-height: 1.6; color: #333; max-width: 1200px; margin: 0 auto; padding: 20px; }}
         h1, h2, h3 {{ color: #2c3e50; border-bottom: 1px solid #eee; padding-bottom: 10px; }}
-        table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
-        th, td {{ text-align: left; padding: 12px; border-bottom: 1px solid #ddd; }}
+        table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; table-layout: fixed; }}
+        th, td {{ text-align: left; padding: 12px; border-bottom: 1px solid #ddd; word-break: break-all; }}
         th {{ background-color: #f8f9fa; }}
         tr:hover {{ background-color: #f5f5f5; }}
         .summary-card {{ background-color: #e9ecef; padding: 20px; border-radius: 8px; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 20px; }}
@@ -231,6 +263,9 @@ class Reporter:
         .warning {{ color: #721c24; background-color: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; border-radius: 4px; margin-bottom: 5px; }}
         code {{ background-color: #f1f3f5; padding: 2px 4px; border-radius: 4px; font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }}
         .path-list {{ margin: 0; padding: 0; list-style: none; font-size: 0.9em; }}
+        .bar-container {{ position: relative; width: 100%; height: 18px; background-color: #eee; border-radius: 9px; margin-top: 4px; overflow: hidden; }}
+        .bar {{ height: 100%; border-radius: 9px; transition: width 0.3s ease; }}
+        .bar-label {{ position: absolute; right: 8px; top: 0; font-size: 0.75em; color: #666; line-height: 18px; }}
     </style>
 </head>
 <body>
@@ -248,7 +283,7 @@ class Reporter:
 
     <h2>実行条件</h2>
     <table>
-        <tr><th>項目</th><th>設定値</th></tr>
+        <tr><th style="width: 200px;">項目</th><th>設定値</th></tr>
         <tr><td>表示件数 (Top-N)</td><td>{top_n}</td></tr>
         <tr><td>最大解析階層 (Max-Depth)</td><td>{settings.get('max_depth') if settings.get('max_depth') is not None else '無制限'}</td></tr>
         <tr><td>最小ファイルサイズ (Min-Size)</td><td>{format_size(settings.get('min_size', 0))}</td></tr>
@@ -260,40 +295,40 @@ class Reporter:
         <div style="flex: 1; min-width: 400px;">
             <h3>拡張子別ファイル数ランキング (Top {top_n})</h3>
             <table>
-                <tr><th>拡張子</th><th>カウント</th></tr>
-                {"".join(f"<tr><td>{html.escape(ext) or '(拡張子なし)'}</td><td>{count}</td></tr>" for ext, count in self.analysis.get('extensions_count', []))}
+                <tr><th style="width: 150px;">拡張子</th><th>カウント</th></tr>
+                {ext_count_rows}
             </table>
         </div>
         <div style="flex: 1; min-width: 400px;">
             <h3>拡張子別サイズランキング (Top {top_n})</h3>
             <table>
-                <tr><th>拡張子</th><th>サイズ</th></tr>
-                {"".join(f"<tr><td>{html.escape(ext) or '(拡張子なし)'}</td><td>{format_size(size)}</td></tr>" for ext, size in self.analysis.get('extensions_size', []))}
+                <tr><th style="width: 150px;">拡張子</th><th>サイズ</th></tr>
+                {ext_size_rows}
             </table>
         </div>
     </div>
 
     <h3>年別ファイル数</h3>
     <table>
-        <tr><th>年</th><th>カウント</th></tr>
+        <tr><th style="width: 150px;">年</th><th>カウント</th></tr>
         {"".join(f"<tr><td>{year}</td><td>{count}</td></tr>" for year, count in self.analysis.get('years_count', []))}
     </table>
 
     <h3>大容量ファイル (Top {top_n})</h3>
-    <table>
-        <tr><th>ファイルパス</th><th>サイズ</th><th>最終更新日時</th></tr>
+    <table style="table-layout: auto;">
+        <tr><th>ファイルパス</th><th style="width: 120px;">サイズ</th><th style="width: 180px;">最終更新日時</th></tr>
         {"".join(f"<tr><td><code>{html.escape(str(f.path if hasattr(f, 'path') else f.get('path')))}</code></td><td>{format_size(f.size if hasattr(f, 'size') else f.get('size'))}</td><td>{datetime.fromtimestamp(f.mtime if hasattr(f, 'mtime') else f.get('mtime')).strftime('%Y-%m-%d %H:%M:%S')}</td></tr>" for f in self.analysis.get('top_large', []))}
     </table>
 
     <h3>長期間更新されていないファイル (Top {top_n})</h3>
-    <table>
-        <tr><th>ファイルパス</th><th>サイズ</th><th>最終更新日時</th></tr>
+    <table style="table-layout: auto;">
+        <tr><th>ファイルパス</th><th style="width: 120px;">サイズ</th><th style="width: 180px;">最終更新日時</th></tr>
         {"".join(f"<tr><td><code>{html.escape(str(f.path if hasattr(f, 'path') else f.get('path')))}</code></td><td>{format_size(f.size if hasattr(f, 'size') else f.get('size'))}</td><td>{datetime.fromtimestamp(f.mtime if hasattr(f, 'mtime') else f.get('mtime')).strftime('%Y-%m-%d %H:%M:%S')}</td></tr>" for f in self.analysis.get('top_old', []))}
     </table>
 
     <h3>重複候補 (Top {top_n} サイズ順)</h3>
-    <table>
-        <tr><th>{'ハッシュ' if is_hash else 'ファイル名'} & サイズ</th><th>パス</th></tr>
+    <table style="table-layout: auto;">
+        <tr><th style="width: 200px;">{'ハッシュ' if is_hash else 'ファイル名'} & サイズ</th><th>パス</th></tr>
         {"".join(f"<tr><td>{html.escape(str(key))}<br>({format_size(size)})</td><td><ul class='path-list'>{''.join(f'<li><code>{html.escape(str(p))}</code></li>' for p in paths)}</ul></td></tr>" for (size, key), paths in self.analysis.get('duplicate_candidates', {}).items())}
     </table>
 

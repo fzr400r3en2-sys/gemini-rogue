@@ -39,13 +39,40 @@ python -m folder_archaeologist "C:\Users\Public" `
     --min-size 1048576
 ```
 
+## 推奨される使い方 / 実践的な例 (Recommended Usage)
+
+### 1. 規模を素早く把握する
+解析前に、そのフォルダがどの程度の規模かを確認します。
+```powershell
+python -m folder_archaeologist "C:\path\to\folder" --depth-summary --depth-summary-max 4
+```
+
+### 2. 全レポートを一括生成して自動で開く
+`--output-dir` を使うと、Markdown, JSON, HTMLの3種類のレポートを一つのディレクトリにまとめて生成できます。さらに `--open-report` でHTMLレポートをブラウザで即座に確認できます。
+```powershell
+python -m folder_archaeologist "C:\path\to\folder" --output-dir "reports_$(Get-Date -Format 'yyyyMMdd')" --open-report
+```
+
+### 3. 条件を絞って重複ファイルを徹底調査
+1MB以上のファイルを対象に、SHA-256ハッシュを用いて厳密な重複チェックを行い、特定ディレクトリに保存します。
+```powershell
+python -m folder_archaeologist "D:\Backup" `
+    --min-size 1048576 `
+    --hash-duplicates `
+    --top-n 50 `
+    --output-dir "./dupe_check" `
+    --open-report
+```
+
 ## オプション説明
 - `target`: 解析対象のフォルダパス（必須）。
+- `--output-dir <DIR>`: 指定したディレクトリ内に全てのレポート（Markdown, JSON, HTML）をデフォルト名で生成します。個別のパス指定と併用した場合は、相対パスのベースディレクトリとして機能します。
+- `--open-report`: HTMLレポートの生成完了後、システムの標準ブラウザで自動的に開きます。
 - `--depth-summary`: 指定フォルダを対象に、複数の max-depth 値ごとの概算サマリー（ファイル数・フォルダ数・総サイズ）をまとめて表示します。安全な事前確認用です。
 - `--depth-summary-max <N>`: depth 0〜N まで確認します。未指定時は 3、上限は 5 です。
 - `--report <PATH>`: Markdown形式のレポートを保存。
 - `--json <PATH>`: JSON形式の詳細データを保存。
-- `--html-report <PATH>`: インタラクティブで美しいHTMLレポートを保存。
+- `--html-report <PATH>`: 美しいグラフ付きHTMLレポートを保存。
 - `--hash-duplicates`: ファイルサイズが同一の場合にSHA-256ハッシュ値を計算して、厳密な重複チェックを行います（デフォルトはサイズと名前で判定）。
 - `--top-n <N>`: 各ランキング（大容量ファイル等）の表示件数（デフォルト: 20）。
 - `--max-depth <N>`: 探索するディレクトリの最大深さ（0はルートのみ）。
