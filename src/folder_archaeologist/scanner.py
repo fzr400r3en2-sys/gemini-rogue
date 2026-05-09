@@ -11,6 +11,7 @@ class FileInfo:
     size: int
     mtime: float
     extension: str
+    depth: int = 0
     is_accessible: bool = True
     sha256_hash: Optional[str] = None
 
@@ -33,6 +34,7 @@ class FileInfo:
 class FolderInfo:
     path: Path
     is_empty: bool
+    depth: int = 0
     is_accessible: bool = True
 
 class Scanner:
@@ -74,9 +76,9 @@ class Scanner:
 
             # Check for empty folders
             if not dirs and not files:
-                self.folders.append(FolderInfo(path=current_root, is_empty=True))
+                self.folders.append(FolderInfo(path=current_root, is_empty=True, depth=depth))
             else:
-                self.folders.append(FolderInfo(path=current_root, is_empty=False))
+                self.folders.append(FolderInfo(path=current_root, is_empty=False, depth=depth))
 
             for name in files:
                 file_path = current_root / name
@@ -86,7 +88,8 @@ class Scanner:
                         path=file_path,
                         size=stat.st_size,
                         mtime=stat.st_mtime,
-                        extension=file_path.suffix.lower()
+                        extension=file_path.suffix.lower(),
+                        depth=depth
                     ))
                 except (PermissionError, OSError) as e:
                     self.files.append(FileInfo(
@@ -94,6 +97,7 @@ class Scanner:
                         size=0,
                         mtime=0,
                         extension=file_path.suffix.lower(),
+                        depth=depth,
                         is_accessible=False
                     ))
                     self.errors.append(f"Cannot access {file_path}: {e}")

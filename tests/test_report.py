@@ -17,8 +17,8 @@ def test_report_formats():
     reporter = Reporter(analysis, stats['errors'])
     
     md = reporter.to_markdown()
-    assert "# Folder Archaeology Report" in md
-    assert "## Summary" in md
+    assert "# フォルダ解析レポート" in md
+    assert "## 概要" in md
     assert ".txt" in md
     
     js = reporter.to_json()

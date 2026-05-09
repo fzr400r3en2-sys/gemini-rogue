@@ -28,6 +28,8 @@ def main():
     parser.add_argument("--max-depth", type=int, help="Maximum recursion depth (0: root only, default: unlimited)")
     parser.add_argument("--min-size", type=int, default=0, help="Minimum file size in bytes to be included in rankings (default: 0)")
     parser.add_argument("--hash-duplicates", action="store_true", help="Identify duplicates by SHA-256 hash (same size only)")
+    parser.add_argument("--depth-summary", action="store_true", help="Display summary by recursion depth")
+    parser.add_argument("--depth-summary-max", type=int, default=3, help="Maximum depth for depth summary (0-5, default: 3)")
     
     args = parser.parse_args()
     
@@ -46,6 +48,14 @@ def main():
     if args.min_size < 0:
         print("Error: --min-size must be 0 or greater.")
         sys.exit(1)
+    
+    if args.depth_summary:
+        if args.hash_duplicates:
+            print("Error: --hash-duplicates cannot be used with --depth-summary.")
+            sys.exit(1)
+        if args.depth_summary_max < 0 or args.depth_summary_max > 5:
+            print("Error: --depth-summary-max must be between 0 and 5.")
+            sys.exit(1)
 
     # Prepare exclusion list
     excludes = []
@@ -64,10 +74,17 @@ def main():
         "top_n": args.top_n,
         "max_depth": args.max_depth,
         "min_size": args.min_size,
-        "hash_duplicates": args.hash_duplicates
+        "hash_duplicates": args.hash_duplicates,
+        "depth_summary": args.depth_summary,
+        "depth_summary_max": args.depth_summary_max if args.depth_summary else None
     }
 
-    scanner = Scanner(args.target, excludes=excludes, max_depth=args.max_depth)
+    # For depth summary, we override max_depth for efficiency
+    scan_max_depth = args.max_depth
+    if args.depth_summary:
+        scan_max_depth = args.depth_summary_max
+
+    scanner = Scanner(args.target, excludes=excludes, max_depth=scan_max_depth)
     try:
         scanner.scan()
     except Exception as e:
@@ -80,7 +97,8 @@ def main():
         stats['folders'], 
         top_n=args.top_n, 
         min_size=args.min_size,
-        hash_duplicates=args.hash_duplicates
+        hash_duplicates=args.hash_duplicates,
+        depth_summary_max=args.depth_summary_max if args.depth_summary else None
     )
     analysis = analyzer.analyze()
     

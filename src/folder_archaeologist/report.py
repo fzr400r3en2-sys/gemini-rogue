@@ -35,6 +35,12 @@ class Reporter:
             print("Mode:          SHA-256 Hash Duplication Detection")
         print("==================================\n")
 
+        if 'depth_summary' in self.analysis:
+            print("Depth Summary")
+            for ds in self.analysis['depth_summary']:
+                print(f"- depth {ds['depth']}: files={ds['files']}, folders={ds['folders']}, size={format_size(ds['size'])}")
+            print("")
+
     def to_json(self) -> str:
         # Convert Path and FileInfo objects to serializable format
         serializable = self._make_serializable(self.analysis)
@@ -50,105 +56,130 @@ class Reporter:
         is_hash = settings.get('hash_duplicates', False)
         
         lines = [
-            "# Folder Archaeology Report",
-            f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            "# フォルダ解析レポート",
+            f"生成日時: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
             "",
-            "## Summary",
-            f"- Total Files: {summary['total_files']}",
-            f"- Total Folders: {summary['total_folders']}",
-            f"- Total Size: {format_size(summary['total_size'])}",
+            "## 概要",
+            f"- 総ファイル数: {summary['total_files']}",
+            f"- 総フォルダ数: {summary['total_folders']}",
+            f"- 総サイズ: {format_size(summary['total_size'])}",
             ""
         ]
+
+        if 'depth_summary' in self.analysis:
+            lines.extend([
+                "## 階層別サマリー",
+                "| 階層 (depth) | ファイル数 | フォルダ数 | 合計サイズ |",
+                "| --- | --- | --- | --- |"
+            ])
+            for ds in self.analysis['depth_summary']:
+                lines.append(f"| {ds['depth']} | {ds['files']} | {ds['folders']} | {format_size(ds['size'])} |")
+            lines.append("")
+            # If depth_summary is present, we might skip other sections if they are empty
         
         lines.extend([
-            "## Settings",
+            "## 実行条件",
             f"- **Top-N**: {top_n}",
-            f"- **Max-Depth**: {settings.get('max_depth') if settings.get('max_depth') is not None else 'Unlimited'}",
-            f"- **Min-Size**: {format_size(settings.get('min_size', 0))}",
-            f"- **Duplication Mode**: {'SHA-256 Hash' if is_hash else 'Size + Name'}",
+            f"- **最大解析階層 (Max-Depth)**: {settings.get('max_depth') if settings.get('max_depth') is not None else '無制限'}",
+            f"- **最小ファイルサイズ (Min-Size)**: {format_size(settings.get('min_size', 0))}",
+            f"- **重複検知モード**: {'SHA-256 ハッシュ' if is_hash else 'サイズ + ファイル名'}",
             ""
         ])
 
         if self.excludes:
             lines.extend([
-                "## Exclusion Settings",
-                "The following folders were excluded from the scan:",
+                "## 除外設定",
+                "以下のフォルダはスキャン対象から除外されました:",
                 "",
             ])
             for ex in self.excludes:
                 lines.append(f"- `{ex}`")
             lines.append("")
 
-        lines.extend([
-            f"## Extensions by Count (Top {top_n})",
-            "| Extension | Count |",
-            "| --- | --- |"
-        ])
-        for ext, count in self.analysis['extensions_count']:
-            lines.append(f"| {ext or '(no extension)'} | {count} |")
+        if 'extensions_count' in self.analysis:
+            lines.extend([
+                f"## 拡張子別ファイル数ランキング (Top {top_n})",
+                "| 拡張子 | カウント |",
+                "| --- | --- |"
+            ])
+            for ext, count in self.analysis['extensions_count']:
+                lines.append(f"| {ext or '(拡張子なし)'} | {count} |")
         
-        lines.extend([
-            "",
-            f"## Extensions by Size (Top {top_n})",
-            "| Extension | Size |",
-            "| --- | --- |"
-        ])
-        for ext, size in self.analysis['extensions_size']:
-            lines.append(f"| {ext or '(no extension)'} | {format_size(size)} |")
+        if 'extensions_size' in self.analysis:
+            lines.extend([
+                "",
+                f"## 拡張子別サイズランキング (Top {top_n})",
+                "| 拡張子 | サイズ |",
+                "| --- | --- |"
+            ])
+            for ext, size in self.analysis['extensions_size']:
+                lines.append(f"| {ext or '(拡張子なし)'} | {format_size(size)} |")
 
-        lines.extend([
-            "",
-            "## Files by Year",
-            "| Year | Count |",
-            "| --- | --- |"
-        ])
-        for year, count in self.analysis['years_count']:
-            lines.append(f"| {year} | {count} |")
+        if 'years_count' in self.analysis:
+            lines.extend([
+                "",
+                "## 年別ファイル数",
+                "| 年 | カウント |",
+                "| --- | --- |"
+            ])
+            for year, count in self.analysis['years_count']:
+                lines.append(f"| {year} | {count} |")
 
-        lines.extend([
-            "",
-            f"## Top {top_n} Large Files",
-            "| File Path | Size | Last Modified |",
-            "| --- | --- | --- |"
-        ])
-        for f in self.analysis['top_large']:
-            mtime = datetime.fromtimestamp(f.mtime).strftime('%Y-%m-%d %H:%M:%S')
-            lines.append(f"| {f.path} | {format_size(f.size)} | {mtime} |")
+        if 'top_large' in self.analysis:
+            lines.extend([
+                "",
+                f"## 大容量ファイル (Top {top_n})",
+                "| ファイルパス | サイズ | 最終更新日時 |",
+                "| --- | --- | --- |"
+            ])
+            for f in self.analysis['top_large']:
+                # Handle both object and dict (if re-loaded from JSON)
+                path = f.path if hasattr(f, 'path') else f.get('path')
+                size = f.size if hasattr(f, 'size') else f.get('size')
+                mtime_val = f.mtime if hasattr(f, 'mtime') else f.get('mtime')
+                mtime = datetime.fromtimestamp(mtime_val).strftime('%Y-%m-%d %H:%M:%S')
+                lines.append(f"| {path} | {format_size(size)} | {mtime} |")
 
-        lines.extend([
-            "",
-            f"## Top {top_n} Oldest Files",
-            "| File Path | Size | Last Modified |",
-            "| --- | --- | --- |"
-        ])
-        for f in self.analysis['top_old']:
-            mtime = datetime.fromtimestamp(f.mtime).strftime('%Y-%m-%d %H:%M:%S')
-            lines.append(f"| {f.path} | {format_size(f.size)} | {mtime} |")
+        if 'top_old' in self.analysis:
+            lines.extend([
+                "",
+                f"## 長期間更新されていないファイル (Top {top_n})",
+                "| ファイルパス | サイズ | 最終更新日時 |",
+                "| --- | --- | --- |"
+            ])
+            for f in self.analysis['top_old']:
+                path = f.path if hasattr(f, 'path') else f.get('path')
+                size = f.size if hasattr(f, 'size') else f.get('size')
+                mtime_val = f.mtime if hasattr(f, 'mtime') else f.get('mtime')
+                mtime = datetime.fromtimestamp(mtime_val).strftime('%Y-%m-%d %H:%M:%S')
+                lines.append(f"| {path} | {format_size(size)} | {mtime} |")
 
-        lines.extend([
-            "",
-            f"## {'Hash' if is_hash else 'Candidate'} Duplicates (Top {top_n} by Size)",
-            "| " + ("Hash & " if is_hash else "Name & ") + "Size | Paths |",
-            "| --- | --- |"
-        ])
-        for (size, key), paths in self.analysis['duplicate_candidates'].items():
-            path_list = "<br>".join(str(p) for p in paths)
-            lines.append(f"| {key} ({format_size(size)}) | {path_list} |")
+        if 'duplicate_candidates' in self.analysis:
+            lines.extend([
+                "",
+                f"## 重複候補 (Top {top_n} サイズ順)",
+                f"| {'ハッシュ' if is_hash else 'ファイル名'} & サイズ | パス |",
+                "| --- | --- |"
+            ])
+            for (size, key), paths in self.analysis['duplicate_candidates'].items():
+                path_list = "<br>".join(str(p) for p in paths)
+                lines.append(f"| {key} ({format_size(size)}) | {path_list} |")
 
-        lines.extend([
-            "",
-            "## Empty Folders",
-        ])
-        if self.analysis['empty_folders']:
-            for path in self.analysis['empty_folders']:
-                lines.append(f"- {path}")
-        else:
-            lines.append("None found.")
+        if 'empty_folders' in self.analysis:
+            lines.extend([
+                "",
+                "## 空フォルダ候補",
+            ])
+            if self.analysis['empty_folders']:
+                for path in self.analysis['empty_folders']:
+                    lines.append(f"- {path}")
+            else:
+                lines.append("該当なし")
 
         if self.errors:
             lines.extend([
                 "",
-                "## Warnings / Errors",
+                "## 警告 / エラー",
             ])
             for err in self.errors:
                 lines.append(f"- {err}")
@@ -162,14 +193,32 @@ class Reporter:
         is_hash = settings.get('hash_duplicates', False)
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
+        depth_summary_html = ""
+        if 'depth_summary' in self.analysis:
+            rows = "".join(f"""
+                <tr>
+                    <td>{ds['depth']}</td>
+                    <td>{ds['files']}</td>
+                    <td>{ds['folders']}</td>
+                    <td>{format_size(ds['size'])}</td>
+                </tr>
+            """ for ds in self.analysis['depth_summary'])
+            depth_summary_html = f"""
+            <h2>階層別サマリー</h2>
+            <table>
+                <tr><th>階層 (depth)</th><th>ファイル数</th><th>フォルダ数</th><th>合計サイズ</th></tr>
+                {rows}
+            </table>
+            """
+
         html_content = f"""<!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Folder Archaeology Report</title>
+    <title>フォルダ解析レポート</title>
     <style>
-        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 1200px; margin: 0 auto; padding: 20px; }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans JP", sans-serif; line-height: 1.6; color: #333; max-width: 1200px; margin: 0 auto; padding: 20px; }}
         h1, h2, h3 {{ color: #2c3e50; border-bottom: 1px solid #eee; padding-bottom: 10px; }}
         table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
         th, td {{ text-align: left; padding: 12px; border-bottom: 1px solid #ddd; }}
@@ -185,71 +234,73 @@ class Reporter:
     </style>
 </head>
 <body>
-    <h1>Folder Archaeology Report</h1>
-    <p>Generated on: {now}</p>
+    <h1>フォルダ解析レポート</h1>
+    <p>生成日時: {now}</p>
 
-    <h2>Summary</h2>
+    <h2>概要</h2>
     <div class="summary-card">
-        <div class="summary-item"><span class="summary-label">Total Files</span><span class="summary-value">{summary['total_files']}</span></div>
-        <div class="summary-item"><span class="summary-label">Total Folders</span><span class="summary-value">{summary['total_folders']}</span></div>
-        <div class="summary-item"><span class="summary-label">Total Size</span><span class="summary-value">{format_size(summary['total_size'])}</span></div>
+        <div class="summary-item"><span class="summary-label">総ファイル数</span><span class="summary-value">{summary['total_files']}</span></div>
+        <div class="summary-item"><span class="summary-label">総フォルダ数</span><span class="summary-value">{summary['total_folders']}</span></div>
+        <div class="summary-item"><span class="summary-label">総サイズ</span><span class="summary-value">{format_size(summary['total_size'])}</span></div>
     </div>
 
-    <h2>Execution Conditions</h2>
+    {depth_summary_html}
+
+    <h2>実行条件</h2>
     <table>
-        <tr><th>Setting</th><th>Value</th></tr>
-        <tr><td>Top-N</td><td>{top_n}</td></tr>
-        <tr><td>Max-Depth</td><td>{settings.get('max_depth') if settings.get('max_depth') is not None else 'Unlimited'}</td></tr>
-        <tr><td>Min-Size</td><td>{format_size(settings.get('min_size', 0))}</td></tr>
-        <tr><td>Duplication Mode</td><td>{'SHA-256 Hash' if is_hash else 'Size + Name'}</td></tr>
-        <tr><td>Excludes</td><td>{html.escape(', '.join(self.excludes)) if self.excludes else 'None'}</td></tr>
+        <tr><th>項目</th><th>設定値</th></tr>
+        <tr><td>表示件数 (Top-N)</td><td>{top_n}</td></tr>
+        <tr><td>最大解析階層 (Max-Depth)</td><td>{settings.get('max_depth') if settings.get('max_depth') is not None else '無制限'}</td></tr>
+        <tr><td>最小ファイルサイズ (Min-Size)</td><td>{format_size(settings.get('min_size', 0))}</td></tr>
+        <tr><td>重複検知モード</td><td>{'SHA-256 ハッシュ' if is_hash else 'サイズ + ファイル名'}</td></tr>
+        <tr><td>除外フォルダ</td><td>{html.escape(', '.join(self.excludes)) if self.excludes else 'なし'}</td></tr>
     </table>
 
     <div style="display: flex; gap: 20px; flex-wrap: wrap;">
         <div style="flex: 1; min-width: 400px;">
-            <h3>Extensions by Count (Top {top_n})</h3>
+            <h3>拡張子別ファイル数ランキング (Top {top_n})</h3>
             <table>
-                <tr><th>Extension</th><th>Count</th></tr>
-                {"".join(f"<tr><td>{html.escape(ext) or '(no extension)'}</td><td>{count}</td></tr>" for ext, count in self.analysis['extensions_count'])}
+                <tr><th>拡張子</th><th>カウント</th></tr>
+                {"".join(f"<tr><td>{html.escape(ext) or '(拡張子なし)'}</td><td>{count}</td></tr>" for ext, count in self.analysis.get('extensions_count', []))}
             </table>
         </div>
         <div style="flex: 1; min-width: 400px;">
-            <h3>Extensions by Size (Top {top_n})</h3>
+            <h3>拡張子別サイズランキング (Top {top_n})</h3>
             <table>
-                <tr><th>Extension</th><th>Size</th></tr>
-                {"".join(f"<tr><td>{html.escape(ext) or '(no extension)'}</td><td>{format_size(size)}</td></tr>" for ext, size in self.analysis['extensions_size'])}
+                <tr><th>拡張子</th><th>サイズ</th></tr>
+                {"".join(f"<tr><td>{html.escape(ext) or '(拡張子なし)'}</td><td>{format_size(size)}</td></tr>" for ext, size in self.analysis.get('extensions_size', []))}
             </table>
         </div>
     </div>
 
-    <h3>Files by Year</h3>
+    <h3>年別ファイル数</h3>
     <table>
-        <tr><th>Year</th><th>Count</th></tr>
-        {"".join(f"<tr><td>{year}</td><td>{count}</td></tr>" for year, count in self.analysis['years_count'])}
+        <tr><th>年</th><th>カウント</th></tr>
+        {"".join(f"<tr><td>{year}</td><td>{count}</td></tr>" for year, count in self.analysis.get('years_count', []))}
     </table>
 
-    <h3>Top {top_n} Large Files</h3>
+    <h3>大容量ファイル (Top {top_n})</h3>
     <table>
-        <tr><th>File Path</th><th>Size</th><th>Last Modified</th></tr>
-        {"".join(f"<tr><td><code>{html.escape(str(f.path))}</code></td><td>{format_size(f.size)}</td><td>{datetime.fromtimestamp(f.mtime).strftime('%Y-%m-%d %H:%M:%S')}</td></tr>" for f in self.analysis['top_large'])}
+        <tr><th>ファイルパス</th><th>サイズ</th><th>最終更新日時</th></tr>
+        {"".join(f"<tr><td><code>{html.escape(str(f.path if hasattr(f, 'path') else f.get('path')))}</code></td><td>{format_size(f.size if hasattr(f, 'size') else f.get('size'))}</td><td>{datetime.fromtimestamp(f.mtime if hasattr(f, 'mtime') else f.get('mtime')).strftime('%Y-%m-%d %H:%M:%S')}</td></tr>" for f in self.analysis.get('top_large', []))}
     </table>
 
-    <h3>Top {top_n} Oldest Files</h3>
+    <h3>長期間更新されていないファイル (Top {top_n})</h3>
     <table>
-        <tr><th>File Path</th><th>Size</th><th>Last Modified</th></tr>
-        {"".join(f"<tr><td><code>{html.escape(str(f.path))}</code></td><td>{format_size(f.size)}</td><td>{datetime.fromtimestamp(f.mtime).strftime('%Y-%m-%d %H:%M:%S')}</td></tr>" for f in self.analysis['top_old'])}
+        <tr><th>ファイルパス</th><th>サイズ</th><th>最終更新日時</th></tr>
+        {"".join(f"<tr><td><code>{html.escape(str(f.path if hasattr(f, 'path') else f.get('path')))}</code></td><td>{format_size(f.size if hasattr(f, 'size') else f.get('size'))}</td><td>{datetime.fromtimestamp(f.mtime if hasattr(f, 'mtime') else f.get('mtime')).strftime('%Y-%m-%d %H:%M:%S')}</td></tr>" for f in self.analysis.get('top_old', []))}
     </table>
 
-    <h3>{'Hash' if is_hash else 'Candidate'} Duplicates (Top {top_n} by Size)</h3>
+    <h3>重複候補 (Top {top_n} サイズ順)</h3>
     <table>
-        <tr><th>{'Hash' if is_hash else 'Name'} & Size</th><th>Paths</th></tr>
-        {"".join(f"<tr><td>{html.escape(str(key))}<br>({format_size(size)})</td><td><ul class='path-list'>{''.join(f'<li><code>{html.escape(str(p))}</code></li>' for p in paths)}</ul></td></tr>" for (size, key), paths in self.analysis['duplicate_candidates'].items())}
+        <tr><th>{'ハッシュ' if is_hash else 'ファイル名'} & サイズ</th><th>パス</th></tr>
+        {"".join(f"<tr><td>{html.escape(str(key))}<br>({format_size(size)})</td><td><ul class='path-list'>{''.join(f'<li><code>{html.escape(str(p))}</code></li>' for p in paths)}</ul></td></tr>" for (size, key), paths in self.analysis.get('duplicate_candidates', {}).items())}
     </table>
 
-    <h3>Empty Folders</h3>
-    {"<ul>" + "".join(f"<li><code>{html.escape(str(p))}</code></li>" for p in self.analysis['empty_folders']) + "</ul>" if self.analysis['empty_folders'] else "<p>None found.</p>"}
+    <h3>空フォルダ候補</h3>
+    {"<ul>" + "".join(f"<li><code>{html.escape(str(p))}</code></li>" for p in self.analysis.get('empty_folders', [])) + "</ul>" if self.analysis.get('empty_folders') else "<p>該当なし</p>"}
 
-    {"<h3>Warnings / Errors</h3>" if self.errors else ""}
+    {"<h3>警告 / エラー</h3>" if self.errors else ""}
     {"".join(f"<div class='warning'>{html.escape(err)}</div>" for err in self.errors)}
 
 </body>

@@ -70,5 +70,5 @@ def test_html_report_generation():
     html_out = reporter.to_html()
     
     assert "<!DOCTYPE html>" in html_out
-    assert "Folder Archaeology Report" in html_out
-    assert "Total Files" in html_out
+    assert "フォルダ解析レポート" in html_out
+    assert "総ファイル数" in html_out

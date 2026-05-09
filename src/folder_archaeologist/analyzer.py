@@ -5,17 +5,45 @@ from typing import List, Dict, Any
 from .scanner import FileInfo, FolderInfo
 
 class Analyzer:
-    def __init__(self, files: List[FileInfo], folders: List[FolderInfo], top_n: int = 20, min_size: int = 0, hash_duplicates: bool = False):
+    def __init__(self, files: List[FileInfo], folders: List[FolderInfo], top_n: int = 20, min_size: int = 0, hash_duplicates: bool = False, depth_summary_max: int = None):
         self.files = files
         self.folders = folders
         self.top_n = top_n
         self.min_size = min_size
         self.hash_duplicates = hash_duplicates
+        self.depth_summary_max = depth_summary_max
 
     def analyze(self) -> Dict[str, Any]:
         total_files = len(self.files)
         total_folders = len(self.folders)
         total_size = sum(f.size for f in self.files if f.is_accessible)
+
+        summary_data = {
+            "total_files": total_files,
+            "total_folders": total_folders,
+            "total_size": total_size,
+            "top_n": self.top_n,
+            "max_depth": getattr(self, 'max_depth', None),
+            "min_size": self.min_size,
+            "hash_duplicates": self.hash_duplicates,
+            "depth_summary_max": self.depth_summary_max
+        }
+
+        if self.depth_summary_max is not None:
+            depth_summary = []
+            for d in range(self.depth_summary_max + 1):
+                d_files = [f for f in self.files if f.depth <= d]
+                d_folders = [f for f in self.folders if f.depth <= d]
+                depth_summary.append({
+                    "depth": d,
+                    "files": len(d_files),
+                    "folders": len(d_folders),
+                    "size": sum(f.size for f in d_files if f.is_accessible)
+                })
+            return {
+                "summary": summary_data,
+                "depth_summary": depth_summary
+            }
 
         # Extensions
         ext_counter = Counter(f.extension for f in self.files if f.is_accessible)
@@ -67,15 +95,7 @@ class Analyzer:
         duplicate_candidates = dict(sorted_duplicates)
 
         return {
-            "summary": {
-                "total_files": total_files,
-                "total_folders": total_folders,
-                "total_size": total_size,
-                "top_n": self.top_n,
-                "max_depth": getattr(self, 'max_depth', None),
-                "min_size": self.min_size,
-                "hash_duplicates": self.hash_duplicates
-            },
+            "summary": summary_data,
             "extensions_count": sorted(ext_counter.items(), key=lambda x: x[1], reverse=True)[:self.top_n],
             "extensions_size": sorted(ext_size.items(), key=lambda x: x[1], reverse=True)[:self.top_n],
             "years_count": sorted(year_counter.items(), reverse=True),

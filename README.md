@@ -19,6 +19,12 @@ pip install .
 
 ## 実行例 (Windows PowerShell)
 ```powershell
+# 解析前に規模を安全に確認（階層別サマリー）
+python -m folder_archaeologist "C:\Users\user\Downloads" --depth-summary
+
+# 階層別サマリーの深さを指定（最大5まで）
+python -m folder_archaeologist "C:\Users\user\Downloads" --depth-summary --depth-summary-max 4
+
 # 基本的な解析
 python -m folder_archaeologist "C:\path\to\analyze" --report report.md
 
@@ -35,6 +41,8 @@ python -m folder_archaeologist "C:\Users\Public" `
 
 ## オプション説明
 - `target`: 解析対象のフォルダパス（必須）。
+- `--depth-summary`: 指定フォルダを対象に、複数の max-depth 値ごとの概算サマリー（ファイル数・フォルダ数・総サイズ）をまとめて表示します。安全な事前確認用です。
+- `--depth-summary-max <N>`: depth 0〜N まで確認します。未指定時は 3、上限は 5 です。
 - `--report <PATH>`: Markdown形式のレポートを保存。
 - `--json <PATH>`: JSON形式の詳細データを保存。
 - `--html-report <PATH>`: インタラクティブで美しいHTMLレポートを保存。
@@ -44,6 +52,14 @@ python -m folder_archaeologist "C:\Users\Public" `
 - `--min-size <BYTES>`: ランキング対象にする最小ファイルサイズ。
 - `--exclude <DIR>`: 除外するディレクトリ名（複数指定可）。
 - `--no-default-excludes`: `.git`, `node_modules` 等のデフォルト除外設定を無効化。
+
+## 安全な使い方（事前確認）
+大規模なフォルダ（ネットワークドライブやバックアップディスクなど）をいきなり深い階層まで解析すると、完了まで時間がかかったりシステムに負荷がかかったりする場合があります。
+
+そのような場合は、まず `--depth-summary` を使用して、浅い階層（depth 0〜3程度）でのファイル数や容量の増え方を確認することをお勧めします。
+
+- `--depth-summary` ではハッシュ計算や詳細なランキング（全ファイルソートなど）を行わないため、非常に安全かつ高速に規模感を把握できます。
+- 規模を確認した後、適切な `--max-depth` や `--min-size` を設定して詳細解析を実行してください。
 
 ## テスト方法
 ```powershell

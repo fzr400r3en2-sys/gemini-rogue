@@ -1,0 +1,63 @@
+{
+  "summary": {
+    "total_files": 63,
+    "total_folders": 37,
+    "total_size": 88785,
+    "top_n": 20,
+    "max_depth": null,
+    "min_size": 0,
+    "hash_duplicates": false,
+    "depth_summary_max": 4
+  },
+  "depth_summary": [
+    {
+      "depth": 0,
+      "files": 9,
+      "folders": 1,
+      "size": 27972
+    },
+    {
+      "depth": 1,
+      "files": 16,
+      "folders": 4,
+      "size": 43624
+    },
+    {
+      "depth": 2,
+      "files": 41,
+      "folders": 16,
+      "size": 88534
+    },
+    {
+      "depth": 3,
+      "files": 52,
+      "folders": 26,
+      "size": 88657
+    },
+    {
+      "depth": 4,
+      "files": 63,
+      "folders": 37,
+      "size": 88785
+    }
+  ],
+  "errors": [],
+  "excludes": [
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".pytest_cache",
+    "node_modules",
+    "dist",
+    "build"
+  ],
+  "settings": {
+    "top_n": 20,
+    "max_depth": null,
+    "min_size": 0,
+    "hash_duplicates": false,
+    "depth_summary": true,
+    "depth_summary_max": 4
+  }
+}
