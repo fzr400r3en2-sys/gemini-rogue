@@ -11,9 +11,10 @@ def format_size(size: int) -> str:
     return f"{size:.2f} PB"
 
 class Reporter:
-    def __init__(self, analysis: Dict[str, Any], errors: List[str]):
+    def __init__(self, analysis: Dict[str, Any], errors: List[str], excludes: List[str] = None):
         self.analysis = analysis
         self.errors = errors
+        self.excludes = excludes or []
 
     def to_stdout(self):
         summary = self.analysis['summary']
@@ -21,12 +22,15 @@ class Reporter:
         print(f"Total Files:   {summary['total_files']}")
         print(f"Total Folders: {summary['total_folders']}")
         print(f"Total Size:    {format_size(summary['total_size'])}")
+        if self.excludes:
+            print(f"Excluded:      {', '.join(self.excludes)}")
         print("==================================\n")
 
     def to_json(self) -> str:
         # Convert Path and FileInfo objects to serializable format
         serializable = self._make_serializable(self.analysis)
         serializable['errors'] = self.errors
+        serializable['excludes'] = self.excludes
         return json.dumps(serializable, indent=2, ensure_ascii=False)
 
     def to_markdown(self) -> str:
@@ -39,11 +43,24 @@ class Reporter:
             f"- Total Files: {summary['total_files']}",
             f"- Total Folders: {summary['total_folders']}",
             f"- Total Size: {format_size(summary['total_size'])}",
-            "",
+            ""
+        ]
+        
+        if self.excludes:
+            lines.extend([
+                "## Exclusion Settings",
+                "The following folders were excluded from the scan:",
+                "",
+            ])
+            for ex in self.excludes:
+                lines.append(f"- `{ex}`")
+            lines.append("")
+
+        lines.extend([
             "## Extensions by Count (Top 10)",
             "| Extension | Count |",
             "| --- | --- |"
-        ]
+        ])
         for ext, count in self.analysis['extensions_count'][:10]:
             lines.append(f"| {ext or '(no extension)'} | {count} |")
         

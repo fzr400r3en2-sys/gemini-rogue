@@ -5,11 +5,24 @@ from .scanner import Scanner
 from .analyzer import Analyzer
 from .report import Reporter
 
+DEFAULT_EXCLUDES = [
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".pytest_cache",
+    "node_modules",
+    "dist",
+    "build"
+]
+
 def main():
     parser = argparse.ArgumentParser(description="Folder Archaeology Tool")
     parser.add_argument("target", help="Target folder to analyze")
     parser.add_argument("--report", help="Path to save Markdown report")
     parser.add_argument("--json", help="Path to save JSON report")
+    parser.add_argument("--no-default-excludes", action="store_true", help="Disable default excludes")
+    parser.add_argument("--exclude", action="append", help="Additional folders to exclude (can be specified multiple times)")
     
     args = parser.parse_args()
     
@@ -17,9 +30,21 @@ def main():
     if not target_path.is_dir():
         print(f"Error: {target_path} is not a directory or does not exist.")
         sys.exit(1)
+
+    # Prepare exclusion list
+    excludes = []
+    if not args.no_default_excludes:
+        excludes.extend(DEFAULT_EXCLUDES)
+    if args.exclude:
+        excludes.extend(args.exclude)
+    # Remove duplicates but maintain some order if possible (set doesn't, but list(dict.fromkeys()) does)
+    excludes = list(dict.fromkeys(excludes))
         
     print(f"Scanning {target_path}...")
-    scanner = Scanner(args.target)
+    if excludes:
+        print(f"Excluding: {', '.join(excludes)}")
+        
+    scanner = Scanner(args.target, excludes=excludes)
     try:
         scanner.scan()
     except Exception as e:
@@ -30,7 +55,7 @@ def main():
     analyzer = Analyzer(stats['files'], stats['folders'])
     analysis = analyzer.analyze()
     
-    reporter = Reporter(analysis, stats['errors'])
+    reporter = Reporter(analysis, stats['errors'], excludes=excludes)
     
     reporter.to_stdout()
     

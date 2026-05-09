@@ -19,17 +19,22 @@ class FolderInfo:
     is_accessible: bool = True
 
 class Scanner:
-    def __init__(self, root_path: str):
+    def __init__(self, root_path: str, excludes: Optional[List[str]] = None):
         self.root_path = Path(root_path)
         self.files: List[FileInfo] = []
         self.folders: List[FolderInfo] = []
         self.errors: List[str] = []
+        self.excludes = excludes or []
 
     def scan(self):
         if not self.root_path.exists():
             raise FileNotFoundError(f"Target folder does not exist: {self.root_path}")
         
         for root, dirs, files in os.walk(self.root_path):
+            # Prune excluded directories
+            if self.excludes:
+                dirs[:] = [d for d in dirs if d not in self.excludes]
+            
             root_path = Path(root)
             
             # Check for empty folders
