@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0d0c1a">
+<title>Gemini Rogue</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+:root {
+  --bg: #0d0c1a;
+  --bg2: #161528;
+  --bg3: #1f1d36;
+  --fg: #e6e6f0;
+  --dim: #8a89a3;
+  --accent: #ffce5e;
+  --hp-good: #58d77a;
+  --hp-mid: #f0c14b;
+  --hp-bad: #ef5a5a;
+  --red: #ef5a5a;
+  --green: #58d77a;
+  --blue: #5fa8ff;
+  --magenta: #c879ff;
+  --cyan: #5fd7e6;
+  --border: #3a3760;
+}
+html, body {
+  margin: 0; padding: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Hiragino Sans", "ヒラギノ角ゴシック", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+#game {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  max-width: 540px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 8px;
+  gap: 8px;
+}
+.panel {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.panel-title {
+  font-size: 12px;
+  color: var(--dim);
+  margin-bottom: 6px;
+  letter-spacing: 0.05em;
+}
+
+/* === ステータス === */
+#status-panel { flex-shrink: 0; }
+.status-grid {
+  display: grid;
+  grid-template-columns: auto 1fr auto 1fr;
+  gap: 4px 10px;
+  font-size: 13px;
+}
+.status-grid .lbl { color: var(--dim); }
+.status-grid .val { color: var(--fg); font-weight: 500; }
+.hp-bar {
+  height: 6px;
+  background: var(--bg3);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 4px;
+  grid-column: span 4;
+}
+.hp-bar > div {
+  height: 100%;
+  transition: width 0.3s, background-color 0.3s;
+}
+.effects {
+  grid-column: span 4;
+  font-size: 11px;
+  color: var(--magenta);
+  margin-top: 2px;
+}
+.floor-tag {
+  background: var(--accent);
+  color: #2a1a00;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+/* === ナラティブ === */
+#narrative {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.story {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--cyan);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  animation: fadeIn 0.25s ease-out;
+}
+.story.title { font-size: 12px; color: var(--dim); border-left-color: var(--accent); padding: 6px 12px; }
+.story.combat { border-left-color: var(--red); }
+.story.victory { border-left-color: var(--green); background: linear-gradient(90deg, rgba(88,215,122,0.15), var(--bg2)); }
+.story.danger { border-left-color: var(--red); color: var(--red); }
+.story.heal { border-left-color: var(--green); color: var(--green); }
+.story.gold { border-left-color: var(--accent); color: var(--accent); }
+.story.shop { border-left-color: var(--cyan); color: var(--cyan); }
+.story.dim { color: var(--dim); border-left-color: var(--border); }
+.story.boss {
+  border-left-color: var(--magenta);
+  background: linear-gradient(135deg, rgba(200,121,255,0.15), var(--bg2));
+  text-align: center;
+  font-size: 16px;
+}
+.story h3 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: var(--accent);
+  font-weight: 600;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* === 戦闘パネル === */
+.combat-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--bg3);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.combat-bar .vs { color: var(--dim); margin: 0 8px; }
+.mhp { color: var(--red); }
+
+/* === アクション === */
+#actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.btn {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 14px;
+  font-size: 15px;
+  font-weight: 500;
+  font-family: inherit;
+  background: var(--bg3);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform 0.05s, background 0.15s;
+  text-align: left;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.btn:active { transform: scale(0.98); background: #2a2745; }
+.btn.primary { background: linear-gradient(180deg, #4b3aaf, #38298a); border-color: #5b4ad0; }
+.btn.danger  { background: linear-gradient(180deg, #a73a3a, #802a2a); border-color: #d05a5a; }
+.btn.small   { min-height: 36px; padding: 6px 10px; font-size: 13px; }
+.btn .num { color: var(--accent); margin-right: 8px; font-weight: 700; }
+.btn .desc { color: var(--dim); font-size: 11px; margin-top: 2px; display: block; }
+
+input.text-input {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 16px;
+  font-family: inherit;
+  background: var(--bg2);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  outline: none;
+}
+input.text-input:focus { border-color: var(--accent); }
+
+/* === タイトル === */
+#title-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 24px 16px;
+  text-align: center;
+  gap: 16px;
+}
+.title-logo {
+  font-size: 28px;
+  font-weight: 800;
+  background: linear-gradient(120deg, var(--accent), var(--magenta));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  letter-spacing: 0.05em;
+}
+.title-sub { color: var(--dim); font-size: 13px; }
+
+/* === 終了画面 === */
+.endcard {
+  text-align: center;
+  padding: 16px;
+}
+.endcard h1 {
+  margin: 0 0 16px;
+  font-size: 24px;
+  background: linear-gradient(120deg, var(--accent), var(--magenta));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.endcard h1.dead {
+  background: linear-gradient(120deg, var(--red), #ff8a8a);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.endcard table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.endcard td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
+.endcard td:first-child { color: var(--dim); }
+.endcard td:last-child  { text-align: right; }
+.score { font-size: 22px; font-weight: 700; color: var(--accent); }
+
+/* iPhone safe-area + scrollbar tidy */
+#narrative::-webkit-scrollbar { width: 4px; }
+#narrative::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+@media (max-height: 600px) { .title-logo { font-size: 22px; } }
+</style>
+</head>
+<body>
+<div id="game">
+  <div id="status-panel" class="panel" style="display:none;">
+    <div class="panel-title"><span class="floor-tag" id="floor-tag">B1F</span> &nbsp; <span id="char-summary"></span></div>
+    <div class="status-grid" id="status-grid"></div>
+  </div>
+  <div id="narrative"></div>
+  <div id="actions"></div>
+</div>
+
+<script>
+"use strict";
+
+// ====================================================================
+// データ
+// ====================================================================
+const FINAL_FLOOR = 20;
+const BOSS_FLOORS = new Set([5, 10, 15, 20]);
+
+const ITEMS = {
+  "ポーション":     { category: "consumable", effect: "heal",      power: 25, price:  30, desc: "HPを25回復" },
+  "ハイポーション": { category: "consumable", effect: "heal",      power: 60, price:  80, desc: "HPを60回復" },
+  "エリクサー":     { category: "consumable", effect: "full_heal", power:  0, price: 200, desc: "HPを全回復" },
+  "毒消し草":       { category: "consumable", effect: "cure_poison",power: 0, price:  25, desc: "毒を治す" },
+  "力の薬":         { category: "consumable", effect: "buff_atk",  power:  5, price:  60, desc: "5ターン攻撃力+5" },
+  "鉄壁の薬":       { category: "consumable", effect: "buff_def",  power:  5, price:  60, desc: "5ターン防御力+5" },
+  "煙玉":           { category: "consumable", effect: "escape",    power:  0, price:  40, desc: "戦闘から確実に逃走" },
+  "魔法の巻物":     { category: "consumable", effect: "magic",     power: 30, price:  70, desc: "敵に30の固定ダメージ" },
+  "賢者の石":       { category: "consumable", effect: "level_up",  power:  0, price: 500, desc: "即座にレベルアップ" },
+  "木の棒":         { category: "weapon", atk:  2, price:   20, desc: "攻撃力+2" },
+  "鉄の剣":         { category: "weapon", atk:  6, price:  120, desc: "攻撃力+6" },
+  "鋼の剣":         { category: "weapon", atk: 12, price:  300, desc: "攻撃力+12" },
+  "炎の剣":         { category: "weapon", atk: 18, price:  600, desc: "攻撃力+18・たまに炎ダメージ" },
+  "竜殺しの槍":     { category: "weapon", atk: 25, price: 1200, desc: "攻撃力+25・竜種に倍ダメージ" },
+  "革の鎧":         { category: "armor", defense:  3, price:   80, desc: "防御力+3" },
+  "鎖帷子":         { category: "armor", defense:  7, price:  220, desc: "防御力+7" },
+  "鋼の鎧":         { category: "armor", defense: 12, price:  500, desc: "防御力+12" },
+  "聖なる鎧":       { category: "armor", defense: 18, price: 1000, desc: "防御力+18・毒無効" },
+};
+
+const MONSTERS = {
+  "スライム":     { name: "スライム",     hp: 12, atk:  4, defense: 1, exp:  6, gold:  5, drops: [["ポーション", 0.15]],                                flavor: "ぷるぷる震える青い塊。", tags: [] },
+  "コウモリ":     { name: "コウモリ",     hp:  8, atk:  5, defense: 0, exp:  5, gold:  4, drops: [["毒消し草", 0.10]],                                  flavor: "鋭い爪で襲いかかってくる。", tags: [] },
+  "ゴブリン":     { name: "ゴブリン",     hp: 18, atk:  7, defense: 2, exp: 10, gold: 12, drops: [["木の棒", 0.08], ["ポーション", 0.10]],              flavor: "緑色の小鬼。下卑た笑みを浮かべる。", tags: [] },
+  "オーク":       { name: "オーク",       hp: 30, atk: 10, defense: 4, exp: 18, gold: 22, drops: [["鉄の剣", 0.05], ["ポーション", 0.20]],              flavor: "筋骨隆々の獣人戦士。", tags: [] },
+  "スケルトン":   { name: "スケルトン",   hp: 24, atk: 11, defense: 3, exp: 16, gold: 18, drops: [["革の鎧", 0.07]],                                    flavor: "カタカタと骨を鳴らす死霊。", tags: ["undead"] },
+  "ダイアウルフ": { name: "ダイアウルフ", hp: 28, atk: 13, defense: 2, exp: 20, gold: 20, drops: [["毒消し草", 0.15]],                                  flavor: "赤い目を輝かせた巨狼。", tags: [] },
+  "トロル":       { name: "トロル",       hp: 55, atk: 16, defense: 6, exp: 35, gold: 45, drops: [["ハイポーション", 0.20], ["鎖帷子", 0.05]],          flavor: "再生する皮膚を持つ巨人。", tags: [] },
+  "ゾンビ":       { name: "ゾンビ",       hp: 40, atk: 14, defense: 4, exp: 30, gold: 30, drops: [["毒消し草", 0.30]],                                  flavor: "腐臭を放つ死者。毒を持つ。", tags: ["undead", "poison"] },
+  "ダークエルフ": { name: "ダークエルフ", hp: 45, atk: 20, defense: 5, exp: 38, gold: 55, drops: [["魔法の巻物", 0.15], ["鋼の剣", 0.04]],              flavor: "影に紛れる弓使い。", tags: [] },
+  "ミノタウロス": { name: "ミノタウロス", hp: 80, atk: 24, defense: 8, exp: 55, gold: 80, drops: [["鋼の剣", 0.10], ["鋼の鎧", 0.06]],                  flavor: "迷宮の主の眷属。", tags: [] },
+  "リッチ":       { name: "リッチ",       hp: 70, atk: 28, defense: 7, exp: 60, gold: 100, drops: [["魔法の巻物", 0.30], ["エリクサー", 0.05]],         flavor: "不死の魔術師。", tags: ["undead"] },
+  "ワイバーン":   { name: "ワイバーン",   hp: 90, atk: 26, defense: 10, exp: 65, gold: 110, drops: [["竜殺しの槍", 0.03], ["ハイポーション", 0.20]],    flavor: "鋭い爪と尾を持つ亜竜。", tags: ["dragon"] },
+  "スライム王":   { name: "スライム王",   hp: 80, atk: 12, defense: 5, exp: 60, gold: 120, drops: [["ハイポーション", 1.0]],                            flavor: "巨大な王冠を被った金色のスライム。", tags: [] },
+  "ゴブリン将軍": { name: "ゴブリン将軍", hp: 160, atk: 22, defense: 10, exp: 140, gold: 300, drops: [["鋼の剣", 1.0], ["力の薬", 1.0]],                flavor: "赤い甲冑の歴戦の戦士。", tags: [] },
+  "古龍":         { name: "古龍",         hp: 300, atk: 34, defense: 14, exp: 280, gold: 600, drops: [["聖なる鎧", 1.0], ["エリクサー", 1.0]],           flavor: "千年を生きた翠の竜。", tags: ["dragon"] },
+  "魔王ザロス":   { name: "魔王ザロス",   hp: 520, atk: 44, defense: 18, exp: 500, gold: 1500, drops: [["賢者の石", 1.0]],                              flavor: "この迷宮の主。漆黒の闇を纏う。", tags: [] },
+};
+
+const FLOOR_POOL = {
+  1: ["スライム", "コウモリ", "ゴブリン"],
+  2: ["コウモリ", "ゴブリン", "オーク"],
+  3: ["オーク", "スケルトン", "ダイアウルフ"],
+  4: ["トロル", "ゾンビ", "ダークエルフ"],
+  5: ["ミノタウロス", "リッチ", "ワイバーン"],
+};
+
+const CLASSES = {
+  "戦士":   { hp: 40, atk: 12, defense: 6, gold: 30, start: ["鉄の剣", "ポーション"],            desc: "高HP・高火力" },
+  "盗賊":   { hp: 28, atk: 11, defense: 4, gold: 80, start: ["木の棒", "煙玉", "煙玉"],          desc: "金銭潤沢・煙玉持ち" },
+  "魔導士": { hp: 24, atk:  8, defense: 3, gold: 50, start: ["木の棒", "魔法の巻物", "魔法の巻物"], desc: "巻物で固定30ダメ" },
+};
+
+const TREASURE_POOL = [
+  ["ポーション", 0.30], ["ハイポーション", 0.10],
+  ["毒消し草", 0.15], ["力の薬", 0.06], ["鉄壁の薬", 0.06],
+  ["煙玉", 0.10], ["魔法の巻物", 0.08],
+  ["鉄の剣", 0.05], ["革の鎧", 0.05],
+  ["鋼の剣", 0.02], ["鎖帷子", 0.02],
+  ["エリクサー", 0.01],
+];
+
+const TRAP_TYPES = [
+  { name: "矢の罠",     desc: "壁から無数の矢が飛び出した！", kind: "phys",   dmg: 12 },
+  { name: "毒霧",       desc: "緑の霧が立ち込める。",         kind: "poison", dmg: 0  },
+  { name: "落とし穴",   desc: "床が抜け、深く転落した！",     kind: "phys",   dmg: 15 },
+  { name: "呪いの石板", desc: "禍々しい紋様が光る。",         kind: "curse",  dmg: 0  },
+  { name: "爆発の罠",   desc: "床のスイッチが弾ける！",       kind: "phys",   dmg: 20 },
+];
+
+const EVENT_FLAVOR = {
+  monster:  ["奥から唸り声が聞こえる。", "血の匂いが漂っている。", "壁に爪痕が刻まれている。"],
+  treasure: ["金属の輝きが見える。", "古い宝箱が安置されている。", "祭壇の上に何かが置かれている。"],
+  empty:    ["静寂に包まれた部屋だ。", "苔むした石壁が広がる。", "湿った空気が流れている。"],
+  trap:     ["床に違和感がある。", "壁の小穴が並んでいる。", "嫌な予感がする。"],
+};
+
+// ====================================================================
+// ヘルパ
+// ====================================================================
+const rand    = (n) => Math.floor(Math.random() * n);
+const randInt = (a, b) => a + rand(b - a + 1);
+const choice  = (arr) => arr[rand(arr.length)];
+function weightedChoice(pairs) {
+  const total = pairs.reduce((s, p) => s + p[1], 0);
+  let r = Math.random() * total;
+  for (const [v, w] of pairs) { r -= w; if (r <= 0) return v; }
+  return pairs[pairs.length - 1][0];
+}
+function floorTier(f) {
+  if (f <= 3)  return 1;
+  if (f <= 6)  return 2;
+  if (f <= 9)  return 3;
+  if (f <= 14) return 4;
+  return 5;
+}
+function bossFor(f) { return ({ 5: "スライム王", 10: "ゴブリン将軍", 15: "古龍", 20: "魔王ザロス" })[f]; }
+function makeMonster(name) { return JSON.parse(JSON.stringify(MONSTERS[name])); }
+
+// ====================================================================
+// プレイヤー
+// ====================================================================
+function newPlayer(name, cls) {
+  const c = CLASSES[cls];
+  const p = {
+    name, cls,
+    level: 1, exp: 0, floor: 1,
+    hp: c.hp, max_hp: c.hp,
+    base_atk: c.atk, base_def: c.defense,
+    gold: c.gold,
+    inventory: [...c.start],
+    weapon: null, armor: null,
+    effects: [], // {name, turns, power}
+  };
+  for (const it of [...p.inventory]) {
+    const info = ITEMS[it];
+    if (info.category === "weapon" && !p.weapon) {
+      p.weapon = it; p.inventory.splice(p.inventory.indexOf(it), 1);
+    } else if (info.category === "armor" && !p.armor) {
+      p.armor = it;  p.inventory.splice(p.inventory.indexOf(it), 1);
+    }
+  }
+  return p;
+}
+function pAtk(p) {
+  let a = p.base_atk + (p.weapon ? ITEMS[p.weapon].atk : 0);
+  for (const e of p.effects) if (e.name === "buff_atk") a += e.power;
+  return a;
+}
+function pDef(p) {
+  let d = p.base_def + (p.armor ? ITEMS[p.armor].defense : 0);
+  for (const e of p.effects) if (e.name === "buff_def") d += e.power;
+  return d;
+}
+function hasEffect(p, name) { return p.effects.some(e => e.name === name); }
+function addEffect(p, name, turns, power = 0) {
+  const ex = p.effects.find(e => e.name === name);
+  if (ex) { ex.turns = Math.max(ex.turns, turns); ex.power = Math.max(ex.power, power); return; }
+  p.effects.push({ name, turns, power });
+}
+function tickEffects(p) {
+  const msgs = [];
+  const surv = [];
+  for (const e of p.effects) {
+    if (e.name === "poison") {
+      if (p.armor === "聖なる鎧") { msgs.push("聖なる鎧が毒を浄化した。"); continue; }
+      p.hp -= 2; msgs.push("毒で2のダメージ。");
+    }
+    e.turns -= 1;
+    if (e.turns > 0) surv.push(e);
+    else msgs.push(`[${effLabel(e.name)}]の効果が切れた。`);
+  }
+  p.effects = surv;
+  if (p.hp < 0) p.hp = 0;
+  return msgs;
+}
+function effLabel(n) { return ({ poison: "毒", buff_atk: "攻↑", buff_def: "防↑" })[n] || n; }
+function needExp(p) { return p.level * 20 + (p.level - 1) * 5; }
+function gainExp(p, exp) {
+  const msgs = [];
+  p.exp += exp;
+  while (p.exp >= needExp(p)) {
+    p.exp -= needExp(p);
+    p.level += 1;
+    p.max_hp += 8;
+    p.hp = p.max_hp;
+    p.base_atk += 2;
+    p.base_def += 1;
+    msgs.push(`★ レベルアップ！ Lv${p.level} (HP+8 / 攻+2 / 防+1)`);
+  }
+  return msgs;
+}
+function heal(p, amt) {
+  const before = p.hp;
+  p.hp = Math.min(p.max_hp, p.hp + amt);
+  return p.hp - before;
+}
+
+// ====================================================================
+// DOM・UI
+// ====================================================================
+const $status     = document.getElementById("status-panel");
+const $statusGrid = document.getElementById("status-grid");
+const $charSummary= document.getElementById("char-summary");
+const $floorTag   = document.getElementById("floor-tag");
+const $narrative  = document.getElementById("narrative");
+const $actions    = document.getElementById("actions");
+
+let player = null;
+
+function renderStatus() {
+  if (!player) { $status.style.display = "none"; return; }
+  $status.style.display = "";
+  $floorTag.textContent = `B${player.floor}F`;
+  $charSummary.textContent = `${player.name} (${player.cls}) Lv${player.level}`;
+
+  const hpRatio = player.hp / player.max_hp;
+  const hpColor = hpRatio > 0.5 ? "var(--hp-good)" : hpRatio > 0.25 ? "var(--hp-mid)" : "var(--hp-bad)";
+
+  const fx = player.effects.length
+    ? `<div class="effects">状態: ${player.effects.map(e => `${effLabel(e.name)}(${e.turns})`).join(", ")}</div>`
+    : "";
+
+  $statusGrid.innerHTML = `
+    <span class="lbl">HP</span><span class="val" style="color:${hpColor}">${player.hp}/${player.max_hp}</span>
+    <span class="lbl">EXP</span><span class="val">${player.exp}/${needExp(player)}</span>
+    <span class="lbl">攻/防</span><span class="val">${pAtk(player)} / ${pDef(player)}</span>
+    <span class="lbl">所持金</span><span class="val" style="color:var(--accent)">${player.gold}G</span>
+    <span class="lbl">武器</span><span class="val">${player.weapon || "なし"}</span>
+    <span class="lbl">防具</span><span class="val">${player.armor || "なし"}</span>
+    <span class="lbl">所持品</span><span class="val" style="grid-column: span 3; font-size:11px;">${player.inventory.length ? compactInv(player.inventory) : "空"}</span>
+    <div class="hp-bar"><div style="width:${hpRatio*100}%; background:${hpColor};"></div></div>
+    ${fx}
+  `;
+}
+function compactInv(inv) {
+  const counts = {};
+  for (const it of inv) counts[it] = (counts[it] || 0) + 1;
+  return Object.entries(counts).map(([k, v]) => v > 1 ? `${k}×${v}` : k).join(", ");
+}
+
+function clearNarrative() { $narrative.innerHTML = ""; }
+function tellRaw(html, cls = "") {
+  const div = document.createElement("div");
+  div.className = "story " + cls;
+  div.innerHTML = html;
+  $narrative.appendChild(div);
+  // 古いログは50件まで
+  while ($narrative.children.length > 50) $narrative.removeChild($narrative.firstChild);
+  $narrative.scrollTop = $narrative.scrollHeight;
+}
+function tell(text, cls = "") { tellRaw(escapeHtml(text), cls); }
+function tellTitle(t)         { tellRaw(escapeHtml(t), "title"); }
+function tellEvent(title, body, cls = "") {
+  tellRaw(`<h3>${escapeHtml(title)}</h3>${escapeHtml(body)}`, cls);
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" })[c]);
+}
+
+function setActions(html) { $actions.innerHTML = html; }
+function clearActions()   { $actions.innerHTML = ""; }
+
+function ask(options, opts = {}) {
+  return new Promise(resolve => {
+    const cls = opts.danger ? "danger" : "";
+    $actions.innerHTML = options.map((o, i) => {
+      const label = typeof o === "string" ? o : o.label;
+      const desc  = typeof o === "object" && o.desc ? `<span class="desc">${escapeHtml(o.desc)}</span>` : "";
+      const dis   = typeof o === "object" && o.disabled ? "disabled style='opacity:0.4;'" : "";
+      return `<button class="btn ${cls}" data-i="${i}" ${dis}><span class="num">${i+1}</span>${escapeHtml(label)}${desc}</button>`;
+    }).join("");
+    $actions.querySelectorAll("button").forEach(b => {
+      b.addEventListener("click", () => {
+        if (b.hasAttribute("disabled")) return;
+        clearActions();
+        resolve(parseInt(b.dataset.i, 10));
+      }, { once: true });
+    });
+  });
+}
+
+function askText(placeholder = "") {
+  return new Promise(resolve => {
+    $actions.innerHTML = `
+      <input class="text-input" id="ti" placeholder="${escapeHtml(placeholder)}" autocomplete="off">
+      <button class="btn primary" id="ti-ok">決定</button>
+    `;
+    const inp = document.getElementById("ti");
+    const ok  = document.getElementById("ti-ok");
+    inp.focus();
+    const submit = () => { const v = inp.value; clearActions(); resolve(v); };
+    ok.addEventListener("click", submit, { once: true });
+    inp.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
+  });
+}
+
+function pause(label = "次へ") {
+  return new Promise(resolve => {
+    $actions.innerHTML = `<button class="btn primary">${escapeHtml(label)}</button>`;
+    $actions.querySelector("button").addEventListener("click", () => { clearActions(); resolve(); }, { once: true });
+  });
+}
+
+// ====================================================================
+// アイテム使用
+// ====================================================================
+function removeOne(arr, x) { const i = arr.indexOf(x); if (i >= 0) arr.splice(i, 1); }
+
+function useItem(p, item, inCombat = false, target = null) {
+  const info = ITEMS[item];
+  if (info.category === "weapon") {
+    const old = p.weapon; p.weapon = item; removeOne(p.inventory, item);
+    if (old) p.inventory.push(old);
+    return [true, `${item} を装備した。${old ? `（${old} を外した）` : ""}`];
+  }
+  if (info.category === "armor") {
+    const old = p.armor; p.armor = item; removeOne(p.inventory, item);
+    if (old) p.inventory.push(old);
+    return [true, `${item} を装備した。${old ? `（${old} を外した）` : ""}`];
+  }
+  switch (info.effect) {
+    case "heal": {
+      const g = heal(p, info.power); removeOne(p.inventory, item);
+      return [true, `${item} を使った。HPが ${g} 回復した。`];
+    }
+    case "full_heal": {
+      const g = heal(p, p.max_hp); removeOne(p.inventory, item);
+      return [true, `エリクサーの輝き！ HPが ${g} 回復した。`];
+    }
+    case "cure_poison": {
+      if (hasEffect(p, "poison")) {
+        p.effects = p.effects.filter(e => e.name !== "poison");
+        removeOne(p.inventory, item);
+        return [true, "毒消し草を噛んだ。毒が消えた。"];
+      }
+      return [false, "今は毒に侵されていない。"];
+    }
+    case "buff_atk": addEffect(p, "buff_atk", 5, info.power); removeOne(p.inventory, item); return [true, "力の薬！ 5ターン攻撃力が上昇した。"];
+    case "buff_def": addEffect(p, "buff_def", 5, info.power); removeOne(p.inventory, item); return [true, "鉄壁の薬！ 5ターン防御力が上昇した。"];
+    case "escape":
+      if (!inCombat) return [false, "戦闘中にしか使えない。"];
+      removeOne(p.inventory, item);
+      return [true, "煙玉を投げつけた！ 視界が遮られる。"];
+    case "magic":
+      if (!inCombat || !target) return [false, "戦闘中にしか使えない。"];
+      target.hp -= info.power; removeOne(p.inventory, item);
+      return [true, `魔法の巻物が炸裂！ ${target.name} に ${info.power} のダメージ！`];
+    case "level_up": {
+      p.exp = needExp(p);
+      const msgs = gainExp(p, 0);
+      removeOne(p.inventory, item);
+      return [true, "賢者の石が砕けた！ " + msgs.join(" ")];
+    }
+  }
+  return [false, "何も起こらなかった。"];
+}
+
+async function openInventory(inCombat = false, target = null) {
+  if (player.inventory.length === 0) {
+    tell("所持品は空だ。", "dim");
+    return null;
+  }
+  const items = [...new Set(player.inventory)];
+  const opts = items.map(it => {
+    const cnt = player.inventory.filter(x => x === it).length;
+    const info = ITEMS[it];
+    return { label: `${it}${cnt > 1 ? ` ×${cnt}` : ""}`, desc: info.desc };
+  });
+  opts.push({ label: "やめる" });
+  const idx = await ask(opts);
+  if (idx === opts.length - 1) return null;
+  const item = items[idx];
+  const [consumed, msg] = useItem(player, item, inCombat, target);
+  tell(msg, consumed ? "shop" : "dim");
+  renderStatus();
+  return consumed ? item : null;
+}
+
+// ====================================================================
+// 戦闘
+// ====================================================================
+function calcDamage(atk, def, variance = 0.25) {
+  const base   = Math.max(1, atk - Math.floor(def / 2));
+  const spread = Math.max(1, Math.floor(base * variance));
+  return Math.max(1, base + randInt(-spread, spread));
+}
+
+async function combat(m, canFlee = true) {
+  tellEvent(`⚔ ${m.name} が現れた`, `${m.flavor}\nHP ${m.hp}  攻撃 ${m.atk}  防御 ${m.defense}`, "combat");
+  let turn = 0;
+  while (m.hp > 0 && player.hp > 0) {
+    turn += 1;
+    const hpR = player.hp / player.max_hp;
+    const hpColor = hpR > 0.5 ? "var(--hp-good)" : hpR > 0.25 ? "var(--hp-mid)" : "var(--hp-bad)";
+    tellRaw(`<div class="combat-bar">
+        <span>ターン ${turn}</span>
+        <span class="vs">⚔</span>
+        <span><span class="mhp">${m.name} HP ${m.hp}</span></span>
+        <span class="vs">vs</span>
+        <span style="color:${hpColor}">あなた ${player.hp}/${player.max_hp}</span>
+      </div>`);
+
+    const opts = [
+      { label: "攻撃" },
+      { label: "防御", desc: "次のダメージ半減" },
+      { label: "アイテム" },
+    ];
+    if (canFlee) opts.push({ label: "逃げる" });
+    const idx = await ask(opts);
+
+    let defending = false, skipEnemy = false;
+
+    if (idx === 0) {
+      const crit = Math.random() < 0.10;
+      let dmg = calcDamage(pAtk(player), m.defense);
+      if (m.tags.includes("dragon") && player.weapon === "竜殺しの槍") {
+        dmg *= 2; tell("竜殺しの槍が輝く！", "shop");
+      }
+      if (player.weapon === "炎の剣" && Math.random() < 0.30) {
+        dmg += 6; tell("炎の刃が燃え上がる！", "danger");
+      }
+      if (crit) { dmg = Math.floor(dmg * 1.8); tell("会心の一撃！", "shop"); }
+      m.hp -= dmg;
+      tell(`あなたの攻撃 → ${m.name} に ${dmg} ダメージ。`);
+    } else if (idx === 1) {
+      defending = true;
+      tell("構えを取った。", "shop");
+    } else if (idx === 2) {
+      const consumed = await openInventory(true, m);
+      if (consumed === null) skipEnemy = true;
+      else if (consumed === "煙玉") { tell(`${m.name} を撒いて逃げ切った！`, "shop"); return false; }
+      else if (m.hp <= 0) break;
+    } else if (idx === 3) {
+      const chance = 0.4 + player.level * 0.03;
+      if (Math.random() < chance) { tell(`${m.name} を撒いて逃げ切った！`, "shop"); return false; }
+      tell("逃げられなかった！", "danger");
+    }
+
+    if (skipEnemy) continue;
+    if (m.hp <= 0) break;
+
+    if (Math.random() < 0.10) {
+      tell(`${m.name} の攻撃は外れた！`);
+    } else {
+      let edmg = calcDamage(m.atk, pDef(player));
+      if (defending) edmg = Math.max(1, Math.floor(edmg / 2));
+      player.hp -= edmg;
+      tell(`${m.name} の攻撃 → あなたに ${edmg} ダメージ。`, "danger");
+      if (m.tags.includes("poison") && !hasEffect(player, "poison") && Math.random() < 0.35) {
+        if (player.armor !== "聖なる鎧") {
+          addEffect(player, "poison", 4);
+          tell("あなたは毒に侵された！", "danger");
+        }
+      }
+    }
+    for (const msg of tickEffects(player)) tell(msg, "dim");
+    renderStatus();
+  }
+
+  if (player.hp <= 0) return false;
+
+  const lines = [`${m.name} を倒した！`, `経験値 ${m.exp} と ${m.gold}G を得た。`];
+  player.gold += m.gold;
+  for (const msg of gainExp(player, m.exp)) lines.push(msg);
+  for (const [item, prob] of m.drops) {
+    if (Math.random() < prob) { player.inventory.push(item); lines.push(`${m.name} は ${item} を落とした！`); }
+  }
+  tellEvent("勝利！", lines.join("\n"), "victory");
+  renderStatus();
+  return true;
+}
+
+// ====================================================================
+// イベント
+// ====================================================================
+async function eventMonster() {
+  let pool = FLOOR_POOL[floorTier(player.floor)];
+  if (Math.random() < 0.12 && FLOOR_POOL[floorTier(player.floor) + 1]) {
+    pool = FLOOR_POOL[floorTier(player.floor) + 1];
+    tell("…なにか強い気配がする。", "danger");
+  }
+  const m = makeMonster(choice(pool));
+  tellEvent("モンスター", `${choice(EVENT_FLAVOR.monster)}\n${m.name} と遭遇した！`, "combat");
+  const idx = await ask(["戦う", { label: "様子を見て逃げる", desc: "階層が深いほど低下" }]);
+  if (idx === 1) {
+    const chance = Math.max(0.25, 0.7 - player.floor * 0.02);
+    if (Math.random() < chance) { tell("そっと後退し、気付かれずに通り抜けた。", "shop"); return; }
+    tell("気付かれた！", "danger");
+  }
+  await combat(m);
+}
+
+async function eventTreasure() {
+  tellEvent("宝箱", `${choice(EVENT_FLAVOR.treasure)}\n古びた宝箱が部屋の中央に置かれている。`);
+  const idx = await ask([
+    "開ける",
+    { label: "罠を疑って蹴り倒す", desc: "罠回避だが破損リスク" },
+    "立ち去る",
+  ]);
+  if (idx === 2) return;
+  let trapped = Math.random() < 0.20 + player.floor * 0.01;
+  if (idx === 1) {
+    if (trapped) { tell("蹴り倒した宝箱から針が飛び出すが、当たらなかった！", "shop"); trapped = false; }
+    else if (Math.random() < 0.4) { tell("中身が壊れてしまった…", "dim"); return; }
+  }
+  if (trapped) {
+    const dmg = randInt(5, 12);
+    player.hp -= dmg;
+    tell(`宝箱は罠だった！ ${dmg} のダメージ。`, "danger");
+    if (player.hp <= 0) return;
+  }
+  const rolls = 1 + (Math.random() < 0.3 ? 1 : 0);
+  const gained = [];
+  for (let i = 0; i < rolls; i++) {
+    const it = weightedChoice(TREASURE_POOL);
+    player.inventory.push(it);
+    gained.push(it);
+  }
+  const gold = randInt(5, 15) * player.floor;
+  player.gold += gold;
+  tell(`${gold}G と ${gained.join(", ")} を手に入れた！`, "gold");
+}
+
+async function eventTrap() {
+  const t = choice(TRAP_TYPES);
+  tellEvent("罠", `${choice(EVENT_FLAVOR.trap)}\nこれは…${t.name}か？`);
+  let idx = await ask([
+    { label: "慎重に避ける", desc: "成功率: 防御依存" },
+    { label: "走って駆け抜ける", desc: "半ダメージ" },
+    { label: `アイテムで対処`, desc: `所持品 ${player.inventory.length} 個` },
+  ]);
+  if (idx === 2) {
+    await openInventory(false);
+    idx = await ask([{ label: "慎重に避ける" }, { label: "駆け抜ける" }]);
+  }
+  const sr = Math.min(0.85, 0.45 + pDef(player) * 0.02);
+  let actual;
+  if (idx === 0) {
+    if (Math.random() < sr) {
+      tell(`${t.desc} だがあなたは見切って避けた！`, "shop");
+      gainExp(player, 3); renderStatus();
+      return;
+    }
+    tell(t.desc, "danger");
+    actual = t.dmg;
+  } else {
+    tell(`${t.desc} 駆け抜けた！`, "danger");
+    actual = Math.floor(t.dmg / 2);
+  }
+  if (t.kind === "phys") {
+    player.hp -= actual;
+    tell(`${actual} のダメージ。`, "danger");
+  } else if (t.kind === "poison") {
+    if (player.armor === "聖なる鎧") tell("聖なる鎧が霧を弾いた。", "shop");
+    else { addEffect(player, "poison", 5); tell("毒に侵された！", "danger"); }
+  } else if (t.kind === "curse") {
+    const loss = Math.min(player.gold, randInt(10, 30));
+    player.gold -= loss;
+    tell(`呪いで ${loss}G が消失した！`, "danger");
+  }
+}
+
+async function eventEmpty() {
+  tellEvent("静寂の部屋", choice(EVENT_FLAVOR.empty));
+  const idx = await ask([
+    { label: "休憩する", desc: "HP最大値の30%回復" },
+    "探索する",
+    { label: "瞑想する", desc: "経験値+5" },
+  ]);
+  if (idx === 0) {
+    const g = heal(player, Math.floor(player.max_hp * 0.3));
+    tell(`少し休んだ。HPが ${g} 回復した。`, "heal");
+  } else if (idx === 1) {
+    if (Math.random() < 0.5) {
+      const g = randInt(3, 10) * player.floor;
+      player.gold += g;
+      tell(`床の隙間に ${g}G を見つけた。`, "gold");
+    } else tell("特に何もなかった。", "dim");
+  } else {
+    const msgs = gainExp(player, 5);
+    tell("精神を研ぎ澄ました。 " + msgs.join(" "), "shop");
+  }
+}
+
+async function eventMerchant() {
+  tellEvent("行商人", "フードを被った行商人が荷物を広げている。\n「ふむ、生きて帰れる客は久しぶりだ。何を見ていく？」", "shop");
+  let pool = ["ポーション", "ハイポーション", "毒消し草", "力の薬", "煙玉", "魔法の巻物", "鉄の剣", "鋼の剣", "革の鎧", "鎖帷子"];
+  if (player.floor >= 8)  pool = pool.concat(["炎の剣", "鋼の鎧", "エリクサー"]);
+  if (player.floor >= 14) pool = pool.concat(["竜殺しの槍", "聖なる鎧"]);
+  const stock = Array.from({ length: 5 }, () => choice(pool));
+
+  while (true) {
+    const opts = stock.map(it => ({
+      label: `${it}  ${ITEMS[it].price}G`,
+      desc: ITEMS[it].desc,
+      disabled: player.gold < ITEMS[it].price,
+    }));
+    opts.push({ label: `売る`, desc: `所持品 ${player.inventory.length} 個` });
+    opts.push({ label: "立ち去る" });
+    const idx = await ask(opts);
+    if (idx === opts.length - 1) { tell("「またのご来店を。生きてればな。」"); return; }
+    if (idx === opts.length - 2) {
+      if (player.inventory.length === 0) { tell("売れる物が無い。", "dim"); continue; }
+      const items = [...new Set(player.inventory)];
+      const sopts = items.map(it => ({ label: `${it} → ${Math.floor(ITEMS[it].price / 2)}G` }));
+      sopts.push({ label: "やめる" });
+      const j = await ask(sopts);
+      if (j === sopts.length - 1) continue;
+      const sold = items[j];
+      removeOne(player.inventory, sold);
+      player.gold += Math.floor(ITEMS[sold].price / 2);
+      tell(`${sold} を ${Math.floor(ITEMS[sold].price / 2)}G で売却した。`, "gold");
+      renderStatus();
+      continue;
+    }
+    const item = stock[idx];
+    const price = ITEMS[item].price;
+    if (player.gold < price) { tell("「金が足りないようだな。」", "danger"); continue; }
+    player.gold -= price;
+    player.inventory.push(item);
+    stock.splice(idx, 1);
+    tell(`${item} を ${price}G で購入した。`, "gold");
+    renderStatus();
+    if (stock.length === 0) { tell("「これで打ち止めだ。気をつけてな。」"); return; }
+  }
+}
+
+async function eventShrine() {
+  tellEvent("祭壇", "古い祭壇から淡い光が漏れている。", "shop");
+  const idx = await ask([
+    { label: "祈る", desc: "HP・状態異常完全回復" },
+    { label: "捧げ物をする", desc: "所持金の10%で最大HP+5" },
+    { label: "破壊して持ち去る", desc: "呪われる可能性" },
+  ]);
+  if (idx === 0) {
+    player.hp = player.max_hp;
+    player.effects = [];
+    tell("温かい光に包まれ、心身ともに癒された。", "heal");
+  } else if (idx === 1) {
+    const cost = Math.max(20, Math.floor(player.gold / 10));
+    if (player.gold < cost) { tell("捧げ物が足りなかった…", "dim"); return; }
+    player.gold -= cost;
+    player.max_hp += 5;
+    player.hp += 5;
+    tell(`${cost}G を捧げた。最大HPが5上昇した。`, "heal");
+  } else {
+    if (Math.random() < 0.4) {
+      player.gold += 100;
+      tell("祭壇から100Gが転がり出た。だが背筋が冷える…", "gold");
+      if (Math.random() < 0.5) { addEffect(player, "poison", 8); tell("呪いで毒に侵された！", "danger"); }
+    } else {
+      tell("天罰！ 雷が落ちた！", "danger");
+      player.hp = Math.max(1, player.hp - 20);
+      addEffect(player, "poison", 6);
+    }
+  }
+}
+
+async function eventFountain() {
+  tellEvent("不思議な泉", "七色に光る泉がある。");
+  const idx = await ask([
+    { label: "飲む", desc: "ランダム効果" },
+    { label: "見つめる", desc: "経験値+10" },
+    "立ち去る",
+  ]);
+  if (idx === 2) return;
+  if (idx === 1) {
+    const msgs = gainExp(player, 10);
+    tell("古の知恵が流れ込んできた。 " + msgs.join(" "), "shop");
+    return;
+  }
+  const r = Math.random();
+  if (r < 0.30) { player.max_hp += 10; player.hp = player.max_hp; tell("最大HPが10上昇した！", "heal"); }
+  else if (r < 0.55) { player.base_atk += 2; tell("攻撃力が永続的に2上昇した！", "heal"); }
+  else if (r < 0.75) { player.base_def += 2; tell("防御力が永続的に2上昇した！", "heal"); }
+  else if (r < 0.90) { const l = randInt(5, 15); player.hp = Math.max(1, player.hp - l); tell(`水は腐っていた！ ${l} のダメージ。`, "danger"); }
+  else { player.max_hp = Math.max(10, player.max_hp - 5); player.hp = Math.min(player.hp, player.max_hp); tell("最大HPが5下がった…", "danger"); }
+}
+
+const RIDDLES = [
+  { q: "「私は食べれば食べるほど大きくなるが、飲めば死ぬ。何だ？」（火/水/影 で答えよ）", a: "火" },
+  { q: "「重ければ前へ、軽ければ後ろへ。私は何？」（年齢/秘密/影 で答えよ）", a: "秘密" },
+  { q: "「2の10乗はいくつ？」（数字で）", a: "1024" },
+  { q: "「黒くして光、白くして闇を成すもの。何？」（墨/影/雲 で答えよ）", a: "墨" },
+  { q: "「持ち上げれば軽く、長く持つほど重くなる。何？」（息/言葉/羽 で答えよ）", a: "息" },
+];
+async function eventRiddle() {
+  const r = choice(RIDDLES);
+  tellEvent("謎かけ", `スフィンクスが立ち塞がる。\n「謎を解けば富を授け、間違えば命を頂く。」\n\n${r.q}`, "shop");
+  const ans = (await askText("答え")).trim();
+  if (ans === r.a) {
+    const g = 50 * player.floor;
+    player.gold += g;
+    const msgs = gainExp(player, 20);
+    tell(`正解！ ${g}G と深い経験を得た。 ` + msgs.join(" "), "gold");
+  } else {
+    tell(`不正解！ 答えは「${r.a}」だった。スフィンクスが襲いかかる！`, "danger");
+    const m = makeMonster(player.floor < 10 ? "ダークエルフ" : "リッチ");
+    m.name = "スフィンクス";
+    await combat(m, false);
+  }
+}
+
+async function eventGamble() {
+  tellEvent("賭場", "怪しい二人組がサイコロを転がしている。\n「賭けてみないか？ 倍か無か。」", "shop");
+  if (player.gold < 10) { tell("（所持金が足りず誘いを断った）", "dim"); return; }
+  while (player.gold >= 10) {
+    const opts = [
+      { label: "10G賭ける", desc: "勝率45%・倍" },
+      { label: "50G賭ける", desc: "勝率40%・倍", disabled: player.gold < 50 },
+      { label: `全額(${player.gold}G)賭ける`, desc: "勝率30%・倍" },
+      { label: "立ち去る" },
+    ];
+    const idx = await ask(opts);
+    if (idx === 3) return;
+    if (idx === 1 && player.gold < 50) continue;
+    const [bet, rate] = [[10, 0.45], [50, 0.40], [player.gold, 0.30]][idx];
+    if (Math.random() < rate) { player.gold += bet; tell(`勝った！ ${bet}G を得た。 (現在 ${player.gold}G)`, "gold"); }
+    else {
+      player.gold -= bet;
+      tell(`負けた… ${bet}G を失った。 (現在 ${player.gold}G)`, "danger");
+      if (player.gold < 10) { tell("「すっからかんか。また来な。」", "dim"); return; }
+    }
+    renderStatus();
+  }
+}
+
+const EVENTS_NORMAL = [
+  [eventMonster,  35],
+  [eventTreasure, 14],
+  [eventTrap,     12],
+  [eventEmpty,    10],
+  [eventMerchant,  9],
+  [eventShrine,    7],
+  [eventFountain,  5],
+  [eventRiddle,    4],
+  [eventGamble,    4],
+];
+function pickEvent() { return weightedChoice(EVENTS_NORMAL); }
+
+async function eventBoss() {
+  const m = makeMonster(bossFor(player.floor));
+  tellEvent(`☠ B${player.floor}F ボス：${m.name}`, `${m.flavor}\n\n──── これより先、逃げる事は叶わない。`, "boss");
+  await pause("戦闘開始");
+  const won = await combat(m, false);
+  if (won && player.floor === FINAL_FLOOR) await ending();
+}
+
+// ====================================================================
+// タイトル/エンディング
+// ====================================================================
+async function titleScreen() {
+  $status.style.display = "none";
+  $narrative.innerHTML = `
+    <div class="story" style="border-left:none; background:transparent; text-align:center; padding-top:24px;">
+      <div class="title-logo">Gemini Rogue</div>
+      <div class="title-sub">〜 全${FINAL_FLOOR}階の迷宮で魔王ザロスを討て 〜</div>
+    </div>
+    <div class="story title">主人公の名前を入力</div>
+  `;
+  const name = (await askText("冒険者")).trim() || "冒険者";
+
+  tellTitle("クラス選択");
+  const opts = Object.entries(CLASSES).map(([k, v]) => ({
+    label: k,
+    desc: `${v.desc}　HP${v.hp}/攻${v.atk}/防${v.defense}/${v.gold}G`,
+  }));
+  const idx = await ask(opts);
+  const cls = Object.keys(CLASSES)[idx];
+  player = newPlayer(name, cls);
+  clearNarrative();
+  tellEvent("冒険の始まり", `${name}（${cls}）は迷宮の入口に立った。`);
+  await pause("迷宮に入る");
+}
+
+async function ending() {
+  clearNarrative(); clearActions();
+  $status.style.display = "none";
+  const score = player.gold + player.level * 100 + player.max_hp * 5;
+  $narrative.innerHTML = `
+    <div class="endcard">
+      <h1>✦ GAME CLEAR ✦</h1>
+      <table>
+        <tr><td>勇者</td><td>${escapeHtml(player.name)} (${player.cls})</td></tr>
+        <tr><td>最終レベル</td><td>${player.level}</td></tr>
+        <tr><td>最大HP</td><td>${player.max_hp}</td></tr>
+        <tr><td>攻 / 防</td><td>${pAtk(player)} / ${pDef(player)}</td></tr>
+        <tr><td>装備</td><td>${player.weapon || "—"} / ${player.armor || "—"}</td></tr>
+        <tr><td>所持金</td><td>${player.gold} G</td></tr>
+        <tr><td>到達階</td><td>${player.floor}F</td></tr>
+        <tr><td>総合スコア</td><td class="score">${score}</td></tr>
+      </table>
+      <p style="margin-top:16px; font-style:italic; color:var(--dim);">
+        魔王ザロスは塵となって消えた。<br>地上に光が戻り、勇者の伝説が始まる──
+      </p>
+    </div>
+  `;
+  $actions.innerHTML = `<button class="btn primary" id="restart">もう一度遊ぶ</button>`;
+  document.getElementById("restart").onclick = () => location.reload();
+  throw new Error("__GAMECLEAR__");
+}
+
+async function gameOver() {
+  const score = player.gold + player.level * 50 + player.floor * 30;
+  $narrative.innerHTML = `
+    <div class="endcard">
+      <h1 class="dead">☠ YOU DIED ☠</h1>
+      <table>
+        <tr><td>到達階</td><td>${player.floor}F</td></tr>
+        <tr><td>レベル</td><td>${player.level}</td></tr>
+        <tr><td>所持金</td><td>${player.gold} G</td></tr>
+        <tr><td>総合スコア</td><td class="score">${score}</td></tr>
+      </table>
+    </div>
+  `;
+  $actions.innerHTML = `<button class="btn primary" id="restart">もう一度遊ぶ</button>`;
+  document.getElementById("restart").onclick = () => location.reload();
+}
+
+// ====================================================================
+// メインループ
+// ====================================================================
+async function gameLoop() {
+  try {
+    await titleScreen();
+    while (player.hp > 0) {
+      renderStatus();
+      if (BOSS_FLOORS.has(player.floor)) {
+        await eventBoss();
+      } else {
+        await pickEvent()();
+      }
+      if (player.hp > 0 && player.effects.length > 0) {
+        for (const msg of tickEffects(player)) tell(msg, "dim");
+        renderStatus();
+      }
+      if (player.hp <= 0) { await gameOver(); return; }
+
+      while (true) {
+        const idx = await ask([
+          { label: "次の階へ進む" },
+          { label: "アイテムを使う", desc: `所持品 ${player.inventory.length} 個` },
+        ]);
+        if (idx === 0) break;
+        await openInventory(false);
+      }
+      player.floor += 1;
+      renderStatus();
+    }
+  } catch (e) {
+    if (e.message === "__GAMECLEAR__") return;
+    throw e;
+  }
+}
+
+// 起動
+gameLoop();
+</script>
+</body>
+</html>
