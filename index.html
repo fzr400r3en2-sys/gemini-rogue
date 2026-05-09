@@ -115,6 +115,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  scroll-behavior: auto;
 }
 .story {
   background: var(--bg2);
@@ -146,6 +147,11 @@ body {
   font-size: 13px;
   color: var(--accent);
   font-weight: 600;
+}
+/* 末尾の余白で「最後のログ」が中途半端に隠れないようにする */
+#narrative::after {
+  content: "";
+  flex: 0 0 1px;
 }
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(4px); }
@@ -212,35 +218,29 @@ input.text-input {
 input.text-input:focus { border-color: var(--accent); }
 
 /* === タイトル === */
-#title-screen {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  padding: 24px 16px;
-  text-align: center;
-  gap: 16px;
-}
 .title-logo {
-  font-size: 28px;
+  font-size: 30px;
   font-weight: 800;
   background: linear-gradient(120deg, var(--accent), var(--magenta));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
   letter-spacing: 0.05em;
+  margin-bottom: 4px;
 }
 .title-sub { color: var(--dim); font-size: 13px; }
 
-/* === 終了画面 === */
+/* === 終了画面・記録カード === */
 .endcard {
   text-align: center;
   padding: 16px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
 }
 .endcard h1 {
   margin: 0 0 16px;
-  font-size: 24px;
+  font-size: 26px;
   background: linear-gradient(120deg, var(--accent), var(--magenta));
   -webkit-background-clip: text;
   background-clip: text;
@@ -252,11 +252,87 @@ input.text-input:focus { border-color: var(--accent); }
   background-clip: text;
   color: transparent;
 }
-.endcard table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.endcard td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
-.endcard td:first-child { color: var(--dim); }
-.endcard td:last-child  { text-align: right; }
+.endcard h2 {
+  margin: 0 0 10px;
+  font-size: 18px;
+  color: var(--accent);
+}
+.endcard h3 {
+  margin: 14px 0 6px;
+  font-size: 13px;
+  color: var(--cyan);
+  text-align: left;
+  letter-spacing: 0.05em;
+}
+.endcard .reason {
+  margin: 6px 0 14px;
+  padding: 8px 12px;
+  background: var(--bg3);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--dim);
+}
+.endcard table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.endcard td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.endcard td:first-child { color: var(--dim); text-align: left; }
+.endcard td:last-child  { text-align: right; font-weight: 500; }
+.endcard tr.ach-row td { padding: 4px 10px; font-size: 12px; }
 .score { font-size: 22px; font-weight: 700; color: var(--accent); }
+.badge-list {
+  display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; margin-top: 8px;
+}
+.badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--bg3);
+  color: var(--accent);
+  border: 1px solid var(--border);
+}
+
+/* === 実績トースト === */
+#toast-container {
+  position: fixed;
+  top: env(safe-area-inset-top);
+  left: 0; right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+  z-index: 1000;
+  padding: 8px;
+  gap: 6px;
+}
+.ach-toast {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  background: linear-gradient(135deg, #ffce5e, #c879ff);
+  color: #1a0d2e;
+  border-radius: 12px;
+  padding: 10px 14px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.45);
+  max-width: 92vw;
+  width: 320px;
+  opacity: 0;
+  transform: translateY(-30px);
+  transition: opacity 0.3s, transform 0.3s;
+  pointer-events: auto;
+}
+.ach-toast.visible { opacity: 1; transform: translateY(0); }
+.ach-icon { font-size: 28px; line-height: 1; }
+.ach-title { font-size: 10px; font-weight: 700; letter-spacing: 0.15em; opacity: 0.7; }
+.ach-name { font-size: 16px; font-weight: 700; line-height: 1.2; }
+.ach-desc { font-size: 11px; opacity: 0.85; }
 
 /* iPhone safe-area + scrollbar tidy */
 #narrative::-webkit-scrollbar { width: 4px; }
@@ -265,6 +341,7 @@ input.text-input:focus { border-color: var(--accent); }
 </style>
 </head>
 <body>
+<div id="toast-container"></div>
 <div id="game">
   <div id="status-panel" class="panel" style="display:none;">
     <div class="panel-title"><span class="floor-tag" id="floor-tag">B1F</span> &nbsp; <span id="char-summary"></span></div>
@@ -362,6 +439,182 @@ const EVENT_FLAVOR = {
 };
 
 // ====================================================================
+// 永続ストレージ層
+// ====================================================================
+const SAVE_VERSION = 1;
+const SAVE_KEY    = `gemini-rogue:save:v${SAVE_VERSION}`;
+const RECORDS_KEY = `gemini-rogue:records:v${SAVE_VERSION}`;
+const ACH_KEY     = `gemini-rogue:achievements:v${SAVE_VERSION}`;
+
+function lsAvailable() {
+  try {
+    const k = "__gr_test__";
+    localStorage.setItem(k, "1");
+    localStorage.removeItem(k);
+    return true;
+  } catch { return false; }
+}
+const LS_OK = lsAvailable();
+
+function loadJSON(key, fallback) {
+  if (!LS_OK) return fallback;
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw == null) return fallback;
+    const v = JSON.parse(raw);
+    if (v == null) return fallback;
+    return v;
+  } catch (e) {
+    console.warn("[storage] load failed:", key, e);
+    try { localStorage.removeItem(key); } catch {}
+    return fallback;
+  }
+}
+function saveJSON(key, value) {
+  if (!LS_OK) return;
+  try { localStorage.setItem(key, JSON.stringify(value)); }
+  catch (e) { console.warn("[storage] save failed:", key, e); }
+}
+function removeKey(key) {
+  if (!LS_OK) return;
+  try { localStorage.removeItem(key); } catch {}
+}
+
+// ---- セーブデータ ----
+function saveGame() {
+  if (!player || player.hp <= 0) return;
+  saveJSON(SAVE_KEY, {
+    version: SAVE_VERSION,
+    player: player,
+    runStats: runStats,
+    savedAt: Date.now(),
+  });
+}
+function loadSave() {
+  const data = loadJSON(SAVE_KEY, null);
+  if (!data || data.version !== SAVE_VERSION || !data.player || typeof data.player.hp !== "number") {
+    if (data) removeKey(SAVE_KEY);
+    return null;
+  }
+  return data;
+}
+function hasSave()   { return !!loadSave(); }
+function clearSave() { removeKey(SAVE_KEY); }
+
+// ---- 冒険記録 ----
+const DEFAULT_RECORDS = {
+  highestFloor: 0,
+  highestScore: 0,
+  clears: 0,
+  deaths: 0,
+  classBest: { "戦士": 0, "盗賊": 0, "魔導士": 0 },
+  classClears: { "戦士": 0, "盗賊": 0, "魔導士": 0 },
+  lastResult: null,
+};
+function loadRecords() {
+  const r = loadJSON(RECORDS_KEY, null);
+  const def = JSON.parse(JSON.stringify(DEFAULT_RECORDS));
+  if (!r || typeof r !== "object") return def;
+  return {
+    ...def,
+    ...r,
+    classBest:   { ...def.classBest,   ...(r.classBest   || {}) },
+    classClears: { ...def.classClears, ...(r.classClears || {}) },
+  };
+}
+function saveRecords(r) { saveJSON(RECORDS_KEY, r); }
+
+function recordRunResult(kind, score, reason) {
+  const r = loadRecords();
+  const fl = (player && player.floor) || 1;
+  const cls = (player && player.cls) || "戦士";
+  if (fl > r.highestFloor) r.highestFloor = fl;
+  if (score > r.highestScore) r.highestScore = score;
+  if (fl > (r.classBest[cls] || 0)) r.classBest[cls] = fl;
+  if (kind === "win") {
+    r.clears += 1;
+    r.classClears[cls] = (r.classClears[cls] || 0) + 1;
+  } else {
+    r.deaths += 1;
+  }
+  r.lastResult = {
+    kind, reason: reason || "",
+    name: player.name, cls,
+    floor: fl, level: player.level, score,
+    kills:     runStats ? runStats.kills        : 0,
+    maxDamage: runStats ? runStats.maxDamage    : 0,
+    gold:      runStats ? runStats.totalGoldGained : 0,
+    weapon: player.weapon, armor: player.armor,
+    date: Date.now(),
+  };
+  saveRecords(r);
+  return r;
+}
+
+// ---- 実績 ----
+const ACHIEVEMENTS = [
+  { id: "first_step",    name: "最初の一歩",   desc: "B2Fに到達した" },
+  { id: "explorer",      name: "探検家",       desc: "B5Fに到達した" },
+  { id: "venturer",      name: "冒険者",       desc: "B10Fに到達した" },
+  { id: "hero_candidate",name: "英雄候補",     desc: "B15Fに到達した" },
+  { id: "savior",        name: "救世主",       desc: "魔王ザロスを討伐した" },
+  { id: "warrior_clear", name: "戦士道",       desc: "戦士でクリアした" },
+  { id: "rogue_clear",   name: "影の王",       desc: "盗賊でクリアした" },
+  { id: "mage_clear",    name: "賢者",         desc: "魔導士でクリアした" },
+  { id: "all_classes",   name: "三位一体",     desc: "全クラスでクリアした" },
+  { id: "rich",          name: "富豪",         desc: "1度の冒険で1000G以上獲得" },
+  { id: "berserker",     name: "豪打",         desc: "1撃で50以上のダメージを与えた" },
+  { id: "slayer",        name: "屠殺者",       desc: "1度の冒険で30体以上撃破" },
+  { id: "level_master",  name: "修練者",       desc: "Lv10に到達した" },
+  { id: "riddle_master", name: "賢人の知",     desc: "謎かけに正解した" },
+  { id: "first_blood",   name: "初討伐",       desc: "初めてモンスターを倒した" },
+];
+function loadAchievements() { return loadJSON(ACH_KEY, {}); }
+function saveAchievements(a) { saveJSON(ACH_KEY, a); }
+function isUnlocked(id) { return !!loadAchievements()[id]; }
+function unlockAch(id) {
+  if (!id) return false;
+  const a = loadAchievements();
+  if (a[id]) return false;
+  const def = ACHIEVEMENTS.find(x => x.id === id);
+  if (!def) return false;
+  a[id] = { unlockedAt: Date.now() };
+  saveAchievements(a);
+  showAchievementToast(def);
+  return true;
+}
+
+// ---- 一括削除 ----
+function wipeAllStorage() {
+  removeKey(SAVE_KEY);
+  removeKey(RECORDS_KEY);
+  removeKey(ACH_KEY);
+}
+
+// ---- ランタイム統計 ----
+let runStats = null;
+function newRunStats() {
+  return { kills: 0, maxDamage: 0, totalGoldGained: 0, lastDamageSource: "" };
+}
+function setLastDamage(src) { if (runStats && src) runStats.lastDamageSource = src; }
+function trackKill() {
+  if (!runStats) return;
+  runStats.kills += 1;
+  if (runStats.kills === 1) unlockAch("first_blood");
+  if (runStats.kills >= 30) unlockAch("slayer");
+}
+function trackDamageDealt(d) {
+  if (!runStats) return;
+  if (d > runStats.maxDamage) runStats.maxDamage = d;
+  if (d >= 50) unlockAch("berserker");
+}
+function trackGoldGain(g) {
+  if (!runStats || g <= 0) return;
+  runStats.totalGoldGained += g;
+  if (runStats.totalGoldGained >= 1000) unlockAch("rich");
+}
+
+// ====================================================================
 // ヘルパ
 // ====================================================================
 const rand    = (n) => Math.floor(Math.random() * n);
@@ -396,7 +649,7 @@ function newPlayer(name, cls) {
     gold: c.gold,
     inventory: [...c.start],
     weapon: null, armor: null,
-    effects: [], // {name, turns, power}
+    effects: [],
   };
   for (const it of [...p.inventory]) {
     const info = ITEMS[it];
@@ -430,7 +683,9 @@ function tickEffects(p) {
   for (const e of p.effects) {
     if (e.name === "poison") {
       if (p.armor === "聖なる鎧") { msgs.push("聖なる鎧が毒を浄化した。"); continue; }
-      p.hp -= 2; msgs.push("毒で2のダメージ。");
+      p.hp -= 2;
+      setLastDamage("毒");
+      msgs.push("毒で2のダメージ。");
     }
     e.turns -= 1;
     if (e.turns > 0) surv.push(e);
@@ -453,6 +708,7 @@ function gainExp(p, exp) {
     p.base_atk += 2;
     p.base_def += 1;
     msgs.push(`★ レベルアップ！ Lv${p.level} (HP+8 / 攻+2 / 防+1)`);
+    if (p.level >= 10) unlockAch("level_master");
   }
   return msgs;
 }
@@ -461,16 +717,22 @@ function heal(p, amt) {
   p.hp = Math.min(p.max_hp, p.hp + amt);
   return p.hp - before;
 }
+function addGold(p, g) {
+  if (g <= 0) return;
+  p.gold += g;
+  trackGoldGain(g);
+}
 
 // ====================================================================
 // DOM・UI
 // ====================================================================
-const $status     = document.getElementById("status-panel");
-const $statusGrid = document.getElementById("status-grid");
-const $charSummary= document.getElementById("char-summary");
-const $floorTag   = document.getElementById("floor-tag");
-const $narrative  = document.getElementById("narrative");
-const $actions    = document.getElementById("actions");
+const $status      = document.getElementById("status-panel");
+const $statusGrid  = document.getElementById("status-grid");
+const $charSummary = document.getElementById("char-summary");
+const $floorTag    = document.getElementById("floor-tag");
+const $narrative   = document.getElementById("narrative");
+const $actions     = document.getElementById("actions");
+const $toastWrap   = document.getElementById("toast-container");
 
 let player = null;
 
@@ -506,14 +768,28 @@ function compactInv(inv) {
 }
 
 function clearNarrative() { $narrative.innerHTML = ""; }
+
+// iOS Safariでも確実に最下部までスクロールするための関数。
+// rAFを2段重ねしレイアウト確定後にscrollTopを更新、
+// さらにsetTimeoutで保険をかける。
+function scrollNarrativeToBottom() {
+  const go = () => { $narrative.scrollTop = $narrative.scrollHeight + 9999; };
+  go();
+  requestAnimationFrame(() => {
+    go();
+    requestAnimationFrame(go);
+  });
+  setTimeout(go, 80);
+  setTimeout(go, 200);
+}
+
 function tellRaw(html, cls = "") {
   const div = document.createElement("div");
   div.className = "story " + cls;
   div.innerHTML = html;
   $narrative.appendChild(div);
-  // 古いログは50件まで
-  while ($narrative.children.length > 50) $narrative.removeChild($narrative.firstChild);
-  $narrative.scrollTop = $narrative.scrollHeight;
+  while ($narrative.children.length > 60) $narrative.removeChild($narrative.firstChild);
+  scrollNarrativeToBottom();
 }
 function tell(text, cls = "") { tellRaw(escapeHtml(text), cls); }
 function tellTitle(t)         { tellRaw(escapeHtml(t), "title"); }
@@ -543,6 +819,8 @@ function ask(options, opts = {}) {
         resolve(parseInt(b.dataset.i, 10));
       }, { once: true });
     });
+    // 行動表示直後にも最下部へスクロール（行動が画面外にあると気づかれない対策）
+    scrollNarrativeToBottom();
   });
 }
 
@@ -558,6 +836,7 @@ function askText(placeholder = "") {
     const submit = () => { const v = inp.value; clearActions(); resolve(v); };
     ok.addEventListener("click", submit, { once: true });
     inp.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
+    scrollNarrativeToBottom();
   });
 }
 
@@ -565,7 +844,28 @@ function pause(label = "次へ") {
   return new Promise(resolve => {
     $actions.innerHTML = `<button class="btn primary">${escapeHtml(label)}</button>`;
     $actions.querySelector("button").addEventListener("click", () => { clearActions(); resolve(); }, { once: true });
+    scrollNarrativeToBottom();
   });
+}
+
+// 実績トースト
+function showAchievementToast(def) {
+  const el = document.createElement("div");
+  el.className = "ach-toast";
+  el.innerHTML = `
+    <div class="ach-icon">🏆</div>
+    <div>
+      <div class="ach-title">実績解除</div>
+      <div class="ach-name">${escapeHtml(def.name)}</div>
+      <div class="ach-desc">${escapeHtml(def.desc)}</div>
+    </div>
+  `;
+  $toastWrap.appendChild(el);
+  requestAnimationFrame(() => el.classList.add("visible"));
+  setTimeout(() => {
+    el.classList.remove("visible");
+    setTimeout(() => el.remove(), 350);
+  }, 3500);
 }
 
 // ====================================================================
@@ -610,7 +910,9 @@ function useItem(p, item, inCombat = false, target = null) {
       return [true, "煙玉を投げつけた！ 視界が遮られる。"];
     case "magic":
       if (!inCombat || !target) return [false, "戦闘中にしか使えない。"];
-      target.hp -= info.power; removeOne(p.inventory, item);
+      target.hp -= info.power;
+      trackDamageDealt(info.power);
+      removeOne(p.inventory, item);
       return [true, `魔法の巻物が炸裂！ ${target.name} に ${info.power} のダメージ！`];
     case "level_up": {
       p.exp = needExp(p);
@@ -688,6 +990,7 @@ async function combat(m, canFlee = true) {
       }
       if (crit) { dmg = Math.floor(dmg * 1.8); tell("会心の一撃！", "shop"); }
       m.hp -= dmg;
+      trackDamageDealt(dmg);
       tell(`あなたの攻撃 → ${m.name} に ${dmg} ダメージ。`);
     } else if (idx === 1) {
       defending = true;
@@ -712,6 +1015,7 @@ async function combat(m, canFlee = true) {
       let edmg = calcDamage(m.atk, pDef(player));
       if (defending) edmg = Math.max(1, Math.floor(edmg / 2));
       player.hp -= edmg;
+      setLastDamage(m.name);
       tell(`${m.name} の攻撃 → あなたに ${edmg} ダメージ。`, "danger");
       if (m.tags.includes("poison") && !hasEffect(player, "poison") && Math.random() < 0.35) {
         if (player.armor !== "聖なる鎧") {
@@ -726,8 +1030,9 @@ async function combat(m, canFlee = true) {
 
   if (player.hp <= 0) return false;
 
+  trackKill();
   const lines = [`${m.name} を倒した！`, `経験値 ${m.exp} と ${m.gold}G を得た。`];
-  player.gold += m.gold;
+  addGold(player, m.gold);
   for (const msg of gainExp(player, m.exp)) lines.push(msg);
   for (const [item, prob] of m.drops) {
     if (Math.random() < prob) { player.inventory.push(item); lines.push(`${m.name} は ${item} を落とした！`); }
@@ -773,6 +1078,7 @@ async function eventTreasure() {
   if (trapped) {
     const dmg = randInt(5, 12);
     player.hp -= dmg;
+    setLastDamage("宝箱の罠");
     tell(`宝箱は罠だった！ ${dmg} のダメージ。`, "danger");
     if (player.hp <= 0) return;
   }
@@ -784,7 +1090,7 @@ async function eventTreasure() {
     gained.push(it);
   }
   const gold = randInt(5, 15) * player.floor;
-  player.gold += gold;
+  addGold(player, gold);
   tell(`${gold}G と ${gained.join(", ")} を手に入れた！`, "gold");
 }
 
@@ -816,10 +1122,11 @@ async function eventTrap() {
   }
   if (t.kind === "phys") {
     player.hp -= actual;
+    setLastDamage(t.name);
     tell(`${actual} のダメージ。`, "danger");
   } else if (t.kind === "poison") {
     if (player.armor === "聖なる鎧") tell("聖なる鎧が霧を弾いた。", "shop");
-    else { addEffect(player, "poison", 5); tell("毒に侵された！", "danger"); }
+    else { addEffect(player, "poison", 5); setLastDamage(t.name); tell("毒に侵された！", "danger"); }
   } else if (t.kind === "curse") {
     const loss = Math.min(player.gold, randInt(10, 30));
     player.gold -= loss;
@@ -840,7 +1147,7 @@ async function eventEmpty() {
   } else if (idx === 1) {
     if (Math.random() < 0.5) {
       const g = randInt(3, 10) * player.floor;
-      player.gold += g;
+      addGold(player, g);
       tell(`床の隙間に ${g}G を見つけた。`, "gold");
     } else tell("特に何もなかった。", "dim");
   } else {
@@ -875,7 +1182,7 @@ async function eventMerchant() {
       if (j === sopts.length - 1) continue;
       const sold = items[j];
       removeOne(player.inventory, sold);
-      player.gold += Math.floor(ITEMS[sold].price / 2);
+      addGold(player, Math.floor(ITEMS[sold].price / 2));
       tell(`${sold} を ${Math.floor(ITEMS[sold].price / 2)}G で売却した。`, "gold");
       renderStatus();
       continue;
@@ -912,12 +1219,13 @@ async function eventShrine() {
     tell(`${cost}G を捧げた。最大HPが5上昇した。`, "heal");
   } else {
     if (Math.random() < 0.4) {
-      player.gold += 100;
+      addGold(player, 100);
       tell("祭壇から100Gが転がり出た。だが背筋が冷える…", "gold");
-      if (Math.random() < 0.5) { addEffect(player, "poison", 8); tell("呪いで毒に侵された！", "danger"); }
+      if (Math.random() < 0.5) { addEffect(player, "poison", 8); setLastDamage("神罰"); tell("呪いで毒に侵された！", "danger"); }
     } else {
       tell("天罰！ 雷が落ちた！", "danger");
       player.hp = Math.max(1, player.hp - 20);
+      setLastDamage("神罰");
       addEffect(player, "poison", 6);
     }
   }
@@ -940,7 +1248,12 @@ async function eventFountain() {
   if (r < 0.30) { player.max_hp += 10; player.hp = player.max_hp; tell("最大HPが10上昇した！", "heal"); }
   else if (r < 0.55) { player.base_atk += 2; tell("攻撃力が永続的に2上昇した！", "heal"); }
   else if (r < 0.75) { player.base_def += 2; tell("防御力が永続的に2上昇した！", "heal"); }
-  else if (r < 0.90) { const l = randInt(5, 15); player.hp = Math.max(1, player.hp - l); tell(`水は腐っていた！ ${l} のダメージ。`, "danger"); }
+  else if (r < 0.90) {
+    const l = randInt(5, 15);
+    player.hp = Math.max(1, player.hp - l);
+    setLastDamage("腐った水");
+    tell(`水は腐っていた！ ${l} のダメージ。`, "danger");
+  }
   else { player.max_hp = Math.max(10, player.max_hp - 5); player.hp = Math.min(player.hp, player.max_hp); tell("最大HPが5下がった…", "danger"); }
 }
 
@@ -957,9 +1270,10 @@ async function eventRiddle() {
   const ans = (await askText("答え")).trim();
   if (ans === r.a) {
     const g = 50 * player.floor;
-    player.gold += g;
+    addGold(player, g);
     const msgs = gainExp(player, 20);
     tell(`正解！ ${g}G と深い経験を得た。 ` + msgs.join(" "), "gold");
+    unlockAch("riddle_master");
   } else {
     tell(`不正解！ 答えは「${r.a}」だった。スフィンクスが襲いかかる！`, "danger");
     const m = makeMonster(player.floor < 10 ? "ダークエルフ" : "リッチ");
@@ -982,7 +1296,7 @@ async function eventGamble() {
     if (idx === 3) return;
     if (idx === 1 && player.gold < 50) continue;
     const [bet, rate] = [[10, 0.45], [50, 0.40], [player.gold, 0.30]][idx];
-    if (Math.random() < rate) { player.gold += bet; tell(`勝った！ ${bet}G を得た。 (現在 ${player.gold}G)`, "gold"); }
+    if (Math.random() < rate) { addGold(player, bet); tell(`勝った！ ${bet}G を得た。 (現在 ${player.gold}G)`, "gold"); }
     else {
       player.gold -= bet;
       tell(`負けた… ${bet}G を失った。 (現在 ${player.gold}G)`, "danger");
@@ -1013,20 +1327,76 @@ async function eventBoss() {
   if (won && player.floor === FINAL_FLOOR) await ending();
 }
 
+// 階層到達系の実績をチェック
+function checkFloorAchievements() {
+  const f = player.floor;
+  if (f >= 2)  unlockAch("first_step");
+  if (f >= 5)  unlockAch("explorer");
+  if (f >= 10) unlockAch("venturer");
+  if (f >= 15) unlockAch("hero_candidate");
+}
+
 // ====================================================================
-// タイトル/エンディング
+// タイトル / メニュー / 記録 / エンディング
 // ====================================================================
+function fmtDate(ts) {
+  const d = new Date(ts);
+  const pad = n => String(n).padStart(2, "0");
+  return `${d.getMonth()+1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 async function titleScreen() {
   $status.style.display = "none";
-  $narrative.innerHTML = `
-    <div class="story" style="border-left:none; background:transparent; text-align:center; padding-top:24px;">
-      <div class="title-logo">Gemini Rogue</div>
-      <div class="title-sub">〜 全${FINAL_FLOOR}階の迷宮で魔王ザロスを討て 〜</div>
-    </div>
-    <div class="story title">主人公の名前を入力</div>
-  `;
-  const name = (await askText("冒険者")).trim() || "冒険者";
+  while (true) {
+    clearNarrative();
+    tellRaw(`
+      <div style="text-align:center;border:none;background:transparent;padding:14px 0;">
+        <div class="title-logo">Gemini Rogue</div>
+        <div class="title-sub">〜 全${FINAL_FLOOR}階の迷宮で魔王ザロスを討て 〜</div>
+      </div>
+    `);
+    if (!LS_OK) tell("⚠ ローカル保存が利用できない環境です。セーブと記録は保持されません。", "danger");
 
+    const save = loadSave();
+    const opts = [{ label: "はじめから", desc: save ? "現在のセーブは破棄される" : "新しい冒険を始める" }];
+    if (save) {
+      const p = save.player;
+      opts.push({
+        label: "続きから",
+        desc: `${p.name}(${p.cls}) Lv${p.level} B${p.floor}F  保存 ${fmtDate(save.savedAt)}`,
+      });
+    } else {
+      opts.push({ label: "続きから", desc: "セーブデータなし", disabled: true });
+    }
+    opts.push({ label: "冒険記録", desc: "実績・最高記録を見る" });
+    opts.push({ label: "記録を消す", desc: "セーブ・記録・実績を全削除" });
+
+    const idx = await ask(opts);
+    if (idx === 0) {
+      if (save) {
+        clearNarrative();
+        tellEvent("⚠ 上書き確認", "現在のセーブを破棄して新しい冒険を始める。良いか？", "danger");
+        const c = await ask([{ label: "破棄して開始" }, { label: "やめる" }]);
+        if (c !== 0) continue;
+      }
+      const ok = await startNewGame();
+      if (ok) return "new";
+    } else if (idx === 1) {
+      const ok = await resumeGame();
+      if (ok) return "resume";
+    } else if (idx === 2) {
+      await showRecords();
+    } else if (idx === 3) {
+      await confirmReset();
+    }
+  }
+}
+
+async function startNewGame() {
+  clearSave();
+  clearNarrative();
+  tellTitle("主人公の名前を入力");
+  const name = (await askText("冒険者")).trim() || "冒険者";
   tellTitle("クラス選択");
   const opts = Object.entries(CLASSES).map(([k, v]) => ({
     label: k,
@@ -1035,53 +1405,189 @@ async function titleScreen() {
   const idx = await ask(opts);
   const cls = Object.keys(CLASSES)[idx];
   player = newPlayer(name, cls);
+  runStats = newRunStats();
   clearNarrative();
   tellEvent("冒険の始まり", `${name}（${cls}）は迷宮の入口に立った。`);
   await pause("迷宮に入る");
+  return true;
+}
+
+async function resumeGame() {
+  const data = loadSave();
+  if (!data) {
+    tell("セーブデータが見つからない。", "danger");
+    await pause("戻る");
+    return false;
+  }
+  try {
+    player   = data.player;
+    runStats = data.runStats || newRunStats();
+    if (typeof player.hp !== "number" || player.hp <= 0) throw new Error("invalid save");
+    clearNarrative();
+    tellEvent("冒険の再開", `${player.name}（${player.cls}）は B${player.floor}F で目を覚ました。`);
+    await pause("続ける");
+    return true;
+  } catch (e) {
+    console.warn("resume failed", e);
+    clearSave();
+    tell("セーブデータが破損していたため初期化した。", "danger");
+    await pause("戻る");
+    return false;
+  }
+}
+
+async function showRecords() {
+  const r = loadRecords();
+  const a = loadAchievements();
+  const unlockedCount = ACHIEVEMENTS.filter(x => a[x.id]).length;
+
+  let html = `<div class="endcard">
+    <h2>📜 冒険記録</h2>
+    <table>
+      <tr><td>最高到達階</td><td>${r.highestFloor}F</td></tr>
+      <tr><td>最高スコア</td><td>${r.highestScore}</td></tr>
+      <tr><td>クリア回数</td><td>${r.clears}</td></tr>
+      <tr><td>死亡回数</td><td>${r.deaths}</td></tr>
+      <tr><td>戦士 最高 / クリア</td><td>${r.classBest["戦士"]}F / ${r.classClears["戦士"]}回</td></tr>
+      <tr><td>盗賊 最高 / クリア</td><td>${r.classBest["盗賊"]}F / ${r.classClears["盗賊"]}回</td></tr>
+      <tr><td>魔導士 最高 / クリア</td><td>${r.classBest["魔導士"]}F / ${r.classClears["魔導士"]}回</td></tr>
+    </table>`;
+  if (r.lastResult) {
+    const lr = r.lastResult;
+    const tag = lr.kind === "win" ? "🎉 勝利" : "☠ 敗北";
+    html += `<h3>最終冒険</h3>
+      <table>
+        <tr><td>結果</td><td>${tag}</td></tr>
+        <tr><td>勇者</td><td>${escapeHtml(lr.name)} (${lr.cls})</td></tr>
+        <tr><td>到達階 / Lv</td><td>B${lr.floor}F / Lv${lr.level}</td></tr>
+        <tr><td>撃破 / 最大ダメ</td><td>${lr.kills}体 / ${lr.maxDamage}</td></tr>
+        <tr><td>${lr.kind === "win" ? "勝因" : "死因"}</td><td>${escapeHtml(lr.reason || "—")}</td></tr>
+        <tr><td>スコア</td><td class="score">${lr.score}</td></tr>
+      </table>`;
+  }
+  html += `<h3>🏆 実績 ${unlockedCount} / ${ACHIEVEMENTS.length}</h3><table>`;
+  for (const def of ACHIEVEMENTS) {
+    const got = !!a[def.id];
+    html += `<tr class="ach-row" style="opacity:${got ? "1" : "0.45"};">
+      <td>${got ? "✅" : "🔒"} ${escapeHtml(def.name)}</td>
+      <td>${escapeHtml(def.desc)}</td>
+    </tr>`;
+  }
+  html += `</table></div>`;
+
+  clearNarrative();
+  tellRaw(html);
+  await pause("戻る");
+}
+
+async function confirmReset() {
+  clearNarrative();
+  tellEvent("⚠ 全記録の削除", "セーブ・冒険記録・実績を全て削除する。\n本当に良いか？", "danger");
+  const idx = await ask([{ label: "削除する", desc: "すべて初期化" }, { label: "やめる" }]);
+  if (idx === 0) {
+    wipeAllStorage();
+    tell("全ての記録を消去した。", "shop");
+    await pause("戻る");
+  }
+}
+
+function computeScore(kind) {
+  if (kind === "win") return player.gold + player.level * 100 + player.max_hp * 5;
+  return player.gold + player.level * 50 + player.floor * 30;
+}
+
+function buildEndCard(kind, reason) {
+  const score = computeScore(kind);
+  const titleClass = kind === "win" ? "" : "dead";
+  const titleText  = kind === "win" ? "✦ GAME CLEAR ✦" : "☠ YOU DIED ☠";
+  const tagline    = kind === "win"
+    ? "魔王ザロスは塵となって消えた。<br>地上に光が戻り、勇者の伝説が始まる──"
+    : "迷宮はまた一つ、骸を増やした…";
+  const a = loadAchievements();
+  const newlyEarned = (window.__newAchIds || []).map(id => ACHIEVEMENTS.find(x => x.id === id)).filter(Boolean);
+  const badges = newlyEarned.length
+    ? `<div class="badge-list">${newlyEarned.map(d => `<span class="badge">🏆 ${escapeHtml(d.name)}</span>`).join("")}</div>`
+    : "";
+
+  return `<div class="endcard">
+    <h1 class="${titleClass}">${titleText}</h1>
+    <div class="reason">${escapeHtml(reason)}</div>
+    <table>
+      <tr><td>勇者</td><td>${escapeHtml(player.name)} (${player.cls})</td></tr>
+      <tr><td>到達階 / Lv</td><td>B${player.floor}F / Lv${player.level}</td></tr>
+      <tr><td>HP</td><td>${player.hp}/${player.max_hp}</td></tr>
+      <tr><td>装備</td><td>${player.weapon || "—"} / ${player.armor || "—"}</td></tr>
+      <tr><td>所持金</td><td>${player.gold}G</td></tr>
+      <tr><td>撃破数</td><td>${runStats.kills}体</td></tr>
+      <tr><td>最大ダメージ</td><td>${runStats.maxDamage}</td></tr>
+      <tr><td>累計獲得G</td><td>${runStats.totalGoldGained}G</td></tr>
+      <tr><td>総合スコア</td><td class="score">${score}</td></tr>
+    </table>
+    ${badges}
+    <p style="margin-top:14px; font-style:italic; color:var(--dim);">${tagline}</p>
+  </div>`;
+}
+
+function captureNewAchievements(fn) {
+  // unlockAch内でshowAchievementToastされる際、新規取得IDを記録するための簡易フック
+  const orig = window.showAchievementToast;
+  const captured = [];
+  window.__newAchIds = captured;
+  window.showAchievementToast = function (def) {
+    captured.push(def.id);
+    return orig.call(this, def);
+  };
+  try { fn(); } finally {
+    window.showAchievementToast = orig;
+  }
 }
 
 async function ending() {
-  clearNarrative(); clearActions();
+  // 実績判定
+  captureNewAchievements(() => {
+    unlockAch("savior");
+    unlockAch({ "戦士": "warrior_clear", "盗賊": "rogue_clear", "魔導士": "mage_clear" }[player.cls]);
+    const a = loadAchievements();
+    if (a.warrior_clear && a.rogue_clear && a.mage_clear) unlockAch("all_classes");
+  });
+  const reason = `魔王ザロスを討伐し、迷宮の闇を払った。`;
+  recordRunResult("win", computeScore("win"), reason);
+  clearSave();
+
   $status.style.display = "none";
-  const score = player.gold + player.level * 100 + player.max_hp * 5;
-  $narrative.innerHTML = `
-    <div class="endcard">
-      <h1>✦ GAME CLEAR ✦</h1>
-      <table>
-        <tr><td>勇者</td><td>${escapeHtml(player.name)} (${player.cls})</td></tr>
-        <tr><td>最終レベル</td><td>${player.level}</td></tr>
-        <tr><td>最大HP</td><td>${player.max_hp}</td></tr>
-        <tr><td>攻 / 防</td><td>${pAtk(player)} / ${pDef(player)}</td></tr>
-        <tr><td>装備</td><td>${player.weapon || "—"} / ${player.armor || "—"}</td></tr>
-        <tr><td>所持金</td><td>${player.gold} G</td></tr>
-        <tr><td>到達階</td><td>${player.floor}F</td></tr>
-        <tr><td>総合スコア</td><td class="score">${score}</td></tr>
-      </table>
-      <p style="margin-top:16px; font-style:italic; color:var(--dim);">
-        魔王ザロスは塵となって消えた。<br>地上に光が戻り、勇者の伝説が始まる──
-      </p>
-    </div>
+  clearNarrative(); clearActions();
+  tellRaw(buildEndCard("win", reason));
+  $actions.innerHTML = `
+    <button class="btn primary" id="btn-restart">もう一度遊ぶ</button>
+    <button class="btn small" id="btn-records">冒険記録を見る</button>
   `;
-  $actions.innerHTML = `<button class="btn primary" id="restart">もう一度遊ぶ</button>`;
-  document.getElementById("restart").onclick = () => location.reload();
+  document.getElementById("btn-restart").onclick = () => location.reload();
+  document.getElementById("btn-records").onclick = async () => {
+    await showRecords();
+    location.reload();
+  };
+  // メインループから抜けるためにフラグを投げる
   throw new Error("__GAMECLEAR__");
 }
 
 async function gameOver() {
-  const score = player.gold + player.level * 50 + player.floor * 30;
-  $narrative.innerHTML = `
-    <div class="endcard">
-      <h1 class="dead">☠ YOU DIED ☠</h1>
-      <table>
-        <tr><td>到達階</td><td>${player.floor}F</td></tr>
-        <tr><td>レベル</td><td>${player.level}</td></tr>
-        <tr><td>所持金</td><td>${player.gold} G</td></tr>
-        <tr><td>総合スコア</td><td class="score">${score}</td></tr>
-      </table>
-    </div>
+  const reason = runStats && runStats.lastDamageSource
+    ? `${runStats.lastDamageSource} に倒された。`
+    : `力尽きた。`;
+  recordRunResult("loss", computeScore("loss"), reason);
+  clearSave();
+
+  clearNarrative(); clearActions();
+  tellRaw(buildEndCard("loss", reason));
+  $actions.innerHTML = `
+    <button class="btn primary" id="btn-restart">もう一度遊ぶ</button>
+    <button class="btn small" id="btn-records">冒険記録を見る</button>
   `;
-  $actions.innerHTML = `<button class="btn primary" id="restart">もう一度遊ぶ</button>`;
-  document.getElementById("restart").onclick = () => location.reload();
+  document.getElementById("btn-restart").onclick = () => location.reload();
+  document.getElementById("btn-records").onclick = async () => {
+    await showRecords();
+    location.reload();
+  };
 }
 
 // ====================================================================
@@ -1091,7 +1597,10 @@ async function gameLoop() {
   try {
     await titleScreen();
     while (player.hp > 0) {
+      saveGame();          // 各階の開始時に自動セーブ
+      checkFloorAchievements();
       renderStatus();
+
       if (BOSS_FLOORS.has(player.floor)) {
         await eventBoss();
       } else {
@@ -1115,7 +1624,9 @@ async function gameLoop() {
       renderStatus();
     }
   } catch (e) {
-    if (e.message === "__GAMECLEAR__") return;
+    if (e && e.message === "__GAMECLEAR__") return;
+    console.error(e);
+    tell("予期せぬエラーが発生したのだ。", "danger");
     throw e;
   }
 }
