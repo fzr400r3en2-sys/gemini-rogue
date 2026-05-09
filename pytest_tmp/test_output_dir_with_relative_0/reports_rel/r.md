@@ -1,5 +1,5 @@
 # フォルダ解析レポート
-生成日時: 2026-05-10 01:42:55
+生成日時: 2026-05-10 02:06:31
 
 ## 概要
 - 総ファイル数: 3
@@ -44,16 +44,16 @@
 ## 大容量ファイル (Top 20)
 | ファイルパス | サイズ | 最終更新日時 |
 | --- | --- | --- |
-| C:\Users\淳一\projects\gemini_test\pytest_tmp\test_output_dir_with_relative_0\target\subdir\file3.txt | 500.00 B | 2026-05-10 01:42:55 |
-| C:\Users\淳一\projects\gemini_test\pytest_tmp\test_output_dir_with_relative_0\target\file2.py | 13.00 B | 2026-05-10 01:42:55 |
-| C:\Users\淳一\projects\gemini_test\pytest_tmp\test_output_dir_with_relative_0\target\file1.txt | 5.00 B | 2026-05-10 01:42:55 |
+| C:\Users\淳一\projects\gemini_test\pytest_tmp\test_output_dir_with_relative_0\target\subdir\file3.txt | 500.00 B | 2026-05-10 02:06:31 |
+| C:\Users\淳一\projects\gemini_test\pytest_tmp\test_output_dir_with_relative_0\target\file2.py | 13.00 B | 2026-05-10 02:06:31 |
+| C:\Users\淳一\projects\gemini_test\pytest_tmp\test_output_dir_with_relative_0\target\file1.txt | 5.00 B | 2026-05-10 02:06:31 |
 
 ## 長期間更新されていないファイル (Top 20)
 | ファイルパス | サイズ | 最終更新日時 |
 | --- | --- | --- |
-| C:\Users\淳一\projects\gemini_test\pytest_tmp\test_output_dir_with_relative_0\target\file1.txt | 5.00 B | 2026-05-10 01:42:55 |
-| C:\Users\淳一\projects\gemini_test\pytest_tmp\test_output_dir_with_relative_0\target\file2.py | 13.00 B | 2026-05-10 01:42:55 |
-| C:\Users\淳一\projects\gemini_test\pytest_tmp\test_output_dir_with_relative_0\target\subdir\file3.txt | 500.00 B | 2026-05-10 01:42:55 |
+| C:\Users\淳一\projects\gemini_test\pytest_tmp\test_output_dir_with_relative_0\target\file1.txt | 5.00 B | 2026-05-10 02:06:31 |
+| C:\Users\淳一\projects\gemini_test\pytest_tmp\test_output_dir_with_relative_0\target\file2.py | 13.00 B | 2026-05-10 02:06:31 |
+| C:\Users\淳一\projects\gemini_test\pytest_tmp\test_output_dir_with_relative_0\target\subdir\file3.txt | 500.00 B | 2026-05-10 02:06:31 |
 
 ## 重複候補 (Top 20 サイズ順)
 | ファイル名 & サイズ | パス |
