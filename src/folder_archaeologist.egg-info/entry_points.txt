@@ -1,0 +1,2 @@
+[console_scripts]
+folder-archaeologist = folder_archaeologist.cli:main

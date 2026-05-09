@@ -1,0 +1,932 @@
+{
+  "summary": {
+    "total_files": 2699,
+    "total_folders": 313,
+    "total_size": 34011946
+  },
+  "extensions_count": [
+    [
+      ".pyc",
+      1197
+    ],
+    [
+      ".py",
+      1196
+    ],
+    [
+      "",
+      164
+    ],
+    [
+      ".txt",
+      41
+    ],
+    [
+      ".typed",
+      26
+    ],
+    [
+      ".exe",
+      24
+    ],
+    [
+      ".sample",
+      14
+    ],
+    [
+      ".md",
+      4
+    ],
+    [
+      ".apache",
+      4
+    ],
+    [
+      ".bsd",
+      4
+    ],
+    [
+      ".pyi",
+      4
+    ],
+    [
+      ".json",
+      3
+    ],
+    [
+      ".pth",
+      2
+    ],
+    [
+      ".tmpl",
+      2
+    ],
+    [
+      ".html",
+      2
+    ],
+    [
+      ".bat",
+      2
+    ],
+    [
+      ".toml",
+      1
+    ],
+    [
+      ".tag",
+      1
+    ],
+    [
+      ".cfg",
+      1
+    ],
+    [
+      ".rst",
+      1
+    ],
+    [
+      ".pem",
+      1
+    ],
+    [
+      ".js",
+      1
+    ],
+    [
+      ".xml",
+      1
+    ],
+    [
+      ".fish",
+      1
+    ],
+    [
+      ".ps1",
+      1
+    ],
+    [
+      ".png",
+      1
+    ]
+  ],
+  "extensions_size": [
+    [
+      ".pyc",
+      16918229
+    ],
+    [
+      ".py",
+      13846134
+    ],
+    [
+      ".exe",
+      2228089
+    ],
+    [
+      "",
+      510479
+    ],
+    [
+      ".pem",
+      272441
+    ],
+    [
+      ".txt",
+      56405
+    ],
+    [
+      ".apache",
+      40696
+    ],
+    [
+      ".pyi",
+      37295
+    ],
+    [
+      ".ps1",
+      29189
+    ],
+    [
+      ".sample",
+      25827
+    ],
+    [
+      ".json",
+      17118
+    ],
+    [
+      ".rst",
+      9222
+    ],
+    [
+      ".bsd",
+      5376
+    ],
+    [
+      ".md",
+      5188
+    ],
+    [
+      ".js",
+      3677
+    ],
+    [
+      ".fish",
+      2279
+    ],
+    [
+      ".bat",
+      1413
+    ],
+    [
+      ".xml",
+      628
+    ],
+    [
+      ".typed",
+      457
+    ],
+    [
+      ".toml",
+      455
+    ],
+    [
+      ".tmpl",
+      356
+    ],
+    [
+      ".cfg",
+      330
+    ],
+    [
+      ".html",
+      266
+    ],
+    [
+      ".pth",
+      193
+    ],
+    [
+      ".tag",
+      191
+    ],
+    [
+      ".png",
+      13
+    ]
+  ],
+  "years_count": [
+    [
+      2026,
+      2699
+    ]
+  ],
+  "top_large": [
+    {
+      "path": ".venv\\Lib\\site-packages\\setuptools\\config\\_validate_pyproject\\fastjsonschema_validations.py",
+      "size": 365819,
+      "mtime": 1778340887.598377,
+      "extension": ".py",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Lib\\site-packages\\pip\\_vendor\\idna\\__pycache__\\uts46data.cpython-314.pyc",
+      "size": 309680,
+      "mtime": 1778340896.4663231,
+      "extension": ".pyc",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Lib\\site-packages\\setuptools\\config\\_validate_pyproject\\__pycache__\\fastjsonschema_validations.cpython-314.pyc",
+      "size": 307510,
+      "mtime": 1778340891.723844,
+      "extension": ".pyc",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Lib\\site-packages\\pip\\_vendor\\certifi\\cacert.pem",
+      "size": 272441,
+      "mtime": 1778340893.3918254,
+      "extension": ".pem",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Scripts\\python.exe",
+      "size": 255320,
+      "mtime": 1773022918.5515726,
+      "extension": ".exe",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Scripts\\pythonw.exe",
+      "size": 251736,
+      "mtime": 1773022918.5515726,
+      "extension": ".exe",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Lib\\site-packages\\pip\\_vendor\\idna\\uts46data.py",
+      "size": 243725,
+      "mtime": 1778340893.4162664,
+      "extension": ".py",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Lib\\site-packages\\pip\\_vendor\\rich\\__pycache__\\_emoji_codes.cpython-314.pyc",
+      "size": 205998,
+      "mtime": 1778340897.9488478,
+      "extension": ".pyc",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Lib\\site-packages\\setuptools\\_vendor\\more_itertools\\__pycache__\\more.cpython-314.pyc",
+      "size": 189722,
+      "mtime": 1778340890.1548755,
+      "extension": ".pyc",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Lib\\site-packages\\pip\\_vendor\\pkg_resources\\__pycache__\\__init__.cpython-314.pyc",
+      "size": 189577,
+      "mtime": 1778340896.9588184,
+      "extension": ".pyc",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Lib\\site-packages\\pygments\\lexers\\__pycache__\\_lilypond_builtins.cpython-314.pyc",
+      "size": 188543,
+      "mtime": 1778341744.621874,
+      "extension": ".pyc",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Lib\\site-packages\\pygments\\lexers\\__pycache__\\_cocoa_builtins.cpython-314.pyc",
+      "size": 186822,
+      "mtime": 1778341744.5149379,
+      "extension": ".pyc",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Lib\\site-packages\\pip\\_vendor\\distlib\\t64-arm.exe",
+      "size": 182784,
+      "mtime": 1778340893.4002469,
+      "extension": ".exe",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Lib\\site-packages\\pip\\_vendor\\distlib\\w64-arm.exe",
+      "size": 168448,
+      "mtime": 1778340893.4043074,
+      "extension": ".exe",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Lib\\site-packages\\setuptools\\_vendor\\more_itertools\\more.py",
+      "size": 163690,
+      "mtime": 1778340887.5499089,
+      "extension": ".py",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Lib\\site-packages\\pygments\\lexers\\lisp.py",
+      "size": 157903,
+      "mtime": 1778341743.8838222,
+      "extension": ".py",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Lib\\site-packages\\pygments\\lexers\\__pycache__\\lisp.cpython-314.pyc",
+      "size": 150238,
+      "mtime": 1778341747.217036,
+      "extension": ".pyc",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Lib\\site-packages\\pip\\_vendor\\rich\\_emoji_codes.py",
+      "size": 140235,
+      "mtime": 1778340893.4810538,
+      "extension": ".py",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Lib\\site-packages\\pip\\_vendor\\rich\\__pycache__\\console.cpython-314.pyc",
+      "size": 137954,
+      "mtime": 1778340898.1610625,
+      "extension": ".pyc",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Lib\\site-packages\\pygments\\lexers\\_lasso_builtins.py",
+      "size": 134513,
+      "mtime": 1778341743.8346047,
+      "extension": ".py",
+      "is_accessible": true
+    }
+  ],
+  "top_old": [
+    {
+      "path": ".venv\\Scripts\\Activate.ps1",
+      "size": 29189,
+      "mtime": 1773022918.5515726,
+      "extension": ".ps1",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Scripts\\deactivate.bat",
+      "size": 393,
+      "mtime": 1773022918.5515726,
+      "extension": ".bat",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Scripts\\python.exe",
+      "size": 255320,
+      "mtime": 1773022918.5515726,
+      "extension": ".exe",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Scripts\\pythonw.exe",
+      "size": 251736,
+      "mtime": 1773022918.5515726,
+      "extension": ".exe",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\.gitignore",
+      "size": 71,
+      "mtime": 1778340864.321885,
+      "extension": "",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\pyvenv.cfg",
+      "size": 330,
+      "mtime": 1778340864.321885,
+      "extension": ".cfg",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Scripts\\activate",
+      "size": 2204,
+      "mtime": 1778340874.1615398,
+      "extension": "",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Scripts\\activate.fish",
+      "size": 2279,
+      "mtime": 1778340874.1697881,
+      "extension": ".fish",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Scripts\\activate.bat",
+      "size": 1020,
+      "mtime": 1778340874.1987813,
+      "extension": ".bat",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Lib\\site-packages\\distutils-precedence.pth",
+      "size": 151,
+      "mtime": 1778340887.460196,
+      "extension": ".pth",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Lib\\site-packages\\_distutils_hack\\__init__.py",
+      "size": 6755,
+      "mtime": 1778340887.4727855,
+      "extension": ".py",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Lib\\site-packages\\_distutils_hack\\override.py",
+      "size": 44,
+      "mtime": 1778340887.473762,
+      "extension": ".py",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Lib\\site-packages\\setuptools\\_core_metadata.py",
+      "size": 11978,
+      "mtime": 1778340887.4747672,
+      "extension": ".py",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Lib\\site-packages\\setuptools\\__init__.py",
+      "size": 9521,
+      "mtime": 1778340887.4747672,
+      "extension": ".py",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Lib\\site-packages\\setuptools\\_discovery.py",
+      "size": 836,
+      "mtime": 1778340887.4753258,
+      "extension": ".py",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Lib\\site-packages\\setuptools\\_entry_points.py",
+      "size": 2468,
+      "mtime": 1778340887.4753258,
+      "extension": ".py",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Lib\\site-packages\\setuptools\\_imp.py",
+      "size": 2435,
+      "mtime": 1778340887.4763703,
+      "extension": ".py",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Lib\\site-packages\\setuptools\\_importlib.py",
+      "size": 223,
+      "mtime": 1778340887.4769094,
+      "extension": ".py",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Lib\\site-packages\\setuptools\\_itertools.py",
+      "size": 657,
+      "mtime": 1778340887.4769094,
+      "extension": ".py",
+      "is_accessible": true
+    },
+    {
+      "path": ".venv\\Lib\\site-packages\\setuptools\\_normalization.py",
+      "size": 5798,
+      "mtime": 1778340887.4776251,
+      "extension": ".py",
+      "is_accessible": true
+    }
+  ],
+  "empty_folders": [
+    ".git\\objects\\info",
+    ".git\\objects\\pack",
+    ".git\\refs\\heads",
+    ".git\\refs\\tags",
+    ".venv\\Include",
+    "tests\\fixtures\\sample_tree\\empty_dir"
+  ],
+  "duplicate_candidates": {
+    "4_INSTALLER": [
+      ".venv\\Lib\\site-packages\\colorama-0.4.6.dist-info\\INSTALLER",
+      ".venv\\Lib\\site-packages\\folder_archaeologist-0.1.0.dist-info\\INSTALLER",
+      ".venv\\Lib\\site-packages\\iniconfig-2.3.0.dist-info\\INSTALLER",
+      ".venv\\Lib\\site-packages\\packaging-26.2.dist-info\\INSTALLER",
+      ".venv\\Lib\\site-packages\\pip-26.1.1.dist-info\\INSTALLER",
+      ".venv\\Lib\\site-packages\\pluggy-1.6.0.dist-info\\INSTALLER",
+      ".venv\\Lib\\site-packages\\pygments-2.20.0.dist-info\\INSTALLER",
+      ".venv\\Lib\\site-packages\\pytest-9.0.3.dist-info\\INSTALLER",
+      ".venv\\Lib\\site-packages\\setuptools-82.0.1.dist-info\\INSTALLER",
+      ".venv\\Lib\\site-packages\\wheel-0.47.0.dist-info\\INSTALLER"
+    ],
+    "71_entry_points.txt": [
+      ".venv\\Lib\\site-packages\\folder_archaeologist-0.1.0.dist-info\\entry_points.txt",
+      "src\\folder_archaeologist.egg-info\\entry_points.txt"
+    ],
+    "0_REQUESTED": [
+      ".venv\\Lib\\site-packages\\folder_archaeologist-0.1.0.dist-info\\REQUESTED",
+      ".venv\\Lib\\site-packages\\pip-26.1.1.dist-info\\REQUESTED",
+      ".venv\\Lib\\site-packages\\pytest-9.0.3.dist-info\\REQUESTED",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\autocommand-2.2.2.dist-info\\REQUESTED",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\backports.tarfile-1.2.0.dist-info\\REQUESTED",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\importlib_metadata-8.7.1.dist-info\\REQUESTED",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\jaraco.text-4.0.0.dist-info\\REQUESTED",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\jaraco_context-6.1.0.dist-info\\REQUESTED",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\jaraco_functools-4.4.0.dist-info\\REQUESTED",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\more_itertools-10.8.0.dist-info\\REQUESTED",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\packaging-26.0.dist-info\\REQUESTED",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\platformdirs-4.4.0.dist-info\\REQUESTED",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\tomli-2.4.0.dist-info\\REQUESTED",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel-0.46.3.dist-info\\REQUESTED",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\zipp-3.23.0.dist-info\\REQUESTED",
+      ".venv\\Lib\\site-packages\\setuptools-82.0.1.dist-info\\REQUESTED",
+      ".venv\\Lib\\site-packages\\wheel-0.47.0.dist-info\\REQUESTED"
+    ],
+    "21_top_level.txt": [
+      ".venv\\Lib\\site-packages\\folder_archaeologist-0.1.0.dist-info\\top_level.txt",
+      "src\\folder_archaeologist.egg-info\\top_level.txt"
+    ],
+    "91_WHEEL": [
+      ".venv\\Lib\\site-packages\\folder_archaeologist-0.1.0.dist-info\\WHEEL",
+      ".venv\\Lib\\site-packages\\iniconfig-2.3.0.dist-info\\WHEEL",
+      ".venv\\Lib\\site-packages\\pluggy-1.6.0.dist-info\\WHEEL",
+      ".venv\\Lib\\site-packages\\pytest-9.0.3.dist-info\\WHEEL",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\importlib_metadata-8.7.1.dist-info\\WHEEL",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\jaraco.text-4.0.0.dist-info\\WHEEL",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\jaraco_context-6.1.0.dist-info\\WHEEL",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\jaraco_functools-4.4.0.dist-info\\WHEEL",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\zipp-3.23.0.dist-info\\WHEEL",
+      ".venv\\Lib\\site-packages\\setuptools-82.0.1.dist-info\\WHEEL"
+    ],
+    "0_py.typed": [
+      ".venv\\Lib\\site-packages\\iniconfig\\py.typed",
+      ".venv\\Lib\\site-packages\\packaging\\py.typed",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\cachecontrol\\py.typed",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\certifi\\py.typed",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\distro\\py.typed",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\idna\\py.typed",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\packaging\\py.typed",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\platformdirs\\py.typed",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\pyproject_hooks\\py.typed",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\resolvelib\\py.typed",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\rich\\py.typed",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\truststore\\py.typed",
+      ".venv\\Lib\\site-packages\\pluggy\\py.typed",
+      ".venv\\Lib\\site-packages\\pytest\\py.typed",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\importlib_metadata\\py.typed",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\jaraco\\context\\py.typed",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\jaraco\\functools\\py.typed",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\more_itertools\\py.typed",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\packaging\\py.typed",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\platformdirs\\py.typed",
+      ".venv\\Lib\\site-packages\\_pytest\\py.typed"
+    ],
+    "704__version.py": [
+      ".venv\\Lib\\site-packages\\iniconfig\\_version.py",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\urllib3\\_version.py"
+    ],
+    "10_top_level.txt": [
+      ".venv\\Lib\\site-packages\\iniconfig-2.3.0.dist-info\\top_level.txt",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\backports.tarfile-1.2.0.dist-info\\top_level.txt"
+    ],
+    "10218_dependency_groups.py": [
+      ".venv\\Lib\\site-packages\\packaging\\dependency_groups.py",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\packaging\\dependency_groups.py"
+    ],
+    "10917_direct_url.py": [
+      ".venv\\Lib\\site-packages\\packaging\\direct_url.py",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\packaging\\direct_url.py"
+    ],
+    "2680_errors.py": [
+      ".venv\\Lib\\site-packages\\packaging\\errors.py",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\packaging\\errors.py"
+    ],
+    "38770_metadata.py": [
+      ".venv\\Lib\\site-packages\\packaging\\metadata.py",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\packaging\\metadata.py"
+    ],
+    "33890_pylock.py": [
+      ".venv\\Lib\\site-packages\\packaging\\pylock.py",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\packaging\\pylock.py"
+    ],
+    "9848_utils.py": [
+      ".venv\\Lib\\site-packages\\packaging\\utils.py",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\packaging\\utils.py"
+    ],
+    "3211__elffile.py": [
+      ".venv\\Lib\\site-packages\\packaging\\_elffile.py",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\packaging\\_elffile.py",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\packaging\\_elffile.py"
+    ],
+    "9559__manylinux.py": [
+      ".venv\\Lib\\site-packages\\packaging\\_manylinux.py",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\packaging\\_manylinux.py",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\packaging\\_manylinux.py"
+    ],
+    "2707__musllinux.py": [
+      ".venv\\Lib\\site-packages\\packaging\\_musllinux.py",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\packaging\\_musllinux.py",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\packaging\\_musllinux.py"
+    ],
+    "11698__parser.py": [
+      ".venv\\Lib\\site-packages\\packaging\\_parser.py",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\packaging\\_parser.py"
+    ],
+    "1109__structures.py": [
+      ".venv\\Lib\\site-packages\\packaging\\_structures.py",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\packaging\\_structures.py"
+    ],
+    "5391__tokenizer.py": [
+      ".venv\\Lib\\site-packages\\packaging\\_tokenizer.py",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\packaging\\_tokenizer.py"
+    ],
+    "494___init__.py": [
+      ".venv\\Lib\\site-packages\\packaging\\__init__.py",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\packaging\\__init__.py",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\packaging\\__init__.py"
+    ],
+    "51122__spdx.py": [
+      ".venv\\Lib\\site-packages\\packaging\\licenses\\_spdx.py",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\packaging\\licenses\\_spdx.py",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\packaging\\licenses\\_spdx.py"
+    ],
+    "7293___init__.py": [
+      ".venv\\Lib\\site-packages\\packaging\\licenses\\__init__.py",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\packaging\\licenses\\__init__.py"
+    ],
+    "82_WHEEL": [
+      ".venv\\Lib\\site-packages\\packaging-26.2.dist-info\\WHEEL",
+      ".venv\\Lib\\site-packages\\pip-26.1.1.dist-info\\WHEEL",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\more_itertools-10.8.0.dist-info\\WHEEL",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\packaging-26.0.dist-info\\WHEEL",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\tomli-2.4.0.dist-info\\WHEEL",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel-0.46.3.dist-info\\WHEEL",
+      ".venv\\Lib\\site-packages\\wheel-0.47.0.dist-info\\WHEEL"
+    ],
+    "197_LICENSE": [
+      ".venv\\Lib\\site-packages\\packaging-26.2.dist-info\\licenses\\LICENSE",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\packaging\\LICENSE",
+      ".venv\\Lib\\site-packages\\pip-26.1.1.dist-info\\licenses\\src\\pip\\_vendor\\packaging\\LICENSE",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\packaging-26.0.dist-info\\licenses\\LICENSE"
+    ],
+    "10174_LICENSE.APACHE": [
+      ".venv\\Lib\\site-packages\\packaging-26.2.dist-info\\licenses\\LICENSE.APACHE",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\packaging\\LICENSE.APACHE",
+      ".venv\\Lib\\site-packages\\pip-26.1.1.dist-info\\licenses\\src\\pip\\_vendor\\packaging\\LICENSE.APACHE",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\packaging-26.0.dist-info\\licenses\\LICENSE.APACHE"
+    ],
+    "1344_LICENSE.BSD": [
+      ".venv\\Lib\\site-packages\\packaging-26.2.dist-info\\licenses\\LICENSE.BSD",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\packaging\\LICENSE.BSD",
+      ".venv\\Lib\\site-packages\\pip-26.1.1.dist-info\\licenses\\src\\pip\\_vendor\\packaging\\LICENSE.BSD",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\packaging-26.0.dist-info\\licenses\\LICENSE.BSD"
+    ],
+    "265___init__.cpython-314.pyc": [
+      ".venv\\Lib\\site-packages\\pip\\_internal\\models\\__pycache__\\__init__.cpython-314.pyc",
+      ".venv\\Lib\\site-packages\\pip\\_internal\\operations\\install\\__pycache__\\__init__.cpython-314.pyc"
+    ],
+    "0___init__.py": [
+      ".venv\\Lib\\site-packages\\pip\\_internal\\operations\\__init__.py",
+      ".venv\\Lib\\site-packages\\pip\\_internal\\operations\\build\\__init__.py",
+      ".venv\\Lib\\site-packages\\pip\\_internal\\resolution\\__init__.py",
+      ".venv\\Lib\\site-packages\\pip\\_internal\\resolution\\legacy\\__init__.py",
+      ".venv\\Lib\\site-packages\\pip\\_internal\\resolution\\resolvelib\\__init__.py",
+      ".venv\\Lib\\site-packages\\pip\\_internal\\utils\\__init__.py",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\urllib3\\contrib\\__init__.py",
+      ".venv\\Lib\\site-packages\\setuptools\\compat\\__init__.py",
+      ".venv\\Lib\\site-packages\\setuptools\\tests\\compat\\__init__.py",
+      ".venv\\Lib\\site-packages\\setuptools\\tests\\config\\__init__.py",
+      ".venv\\Lib\\site-packages\\setuptools\\tests\\integration\\__init__.py",
+      ".venv\\Lib\\site-packages\\setuptools\\_distutils\\tests\\compat\\__init__.py",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\backports\\tarfile\\compat\\__init__.py",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\importlib_metadata\\compat\\__init__.py",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\zipp\\compat\\__init__.py",
+      ".venv\\Lib\\site-packages\\_pytest\\_py\\__init__.py",
+      "src\\folder_archaeologist\\__init__.py"
+    ],
+    "205___init__.cpython-314.pyc": [
+      ".venv\\Lib\\site-packages\\pip\\_internal\\operations\\build\\__pycache__\\__init__.cpython-314.pyc",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\zipp\\compat\\__pycache__\\__init__.cpython-314.pyc"
+    ],
+    "199___init__.cpython-314.pyc": [
+      ".venv\\Lib\\site-packages\\pip\\_internal\\operations\\__pycache__\\__init__.cpython-314.pyc",
+      ".venv\\Lib\\site-packages\\pip\\_internal\\resolution\\__pycache__\\__init__.cpython-314.pyc"
+    ],
+    "558_LICENSE.txt": [
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\cachecontrol\\LICENSE.txt",
+      ".venv\\Lib\\site-packages\\pip-26.1.1.dist-info\\licenses\\src\\pip\\_vendor\\cachecontrol\\LICENSE.txt"
+    ],
+    "989_LICENSE": [
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\certifi\\LICENSE",
+      ".venv\\Lib\\site-packages\\pip-26.1.1.dist-info\\licenses\\src\\pip\\_vendor\\certifi\\LICENSE"
+    ],
+    "14531_LICENSE.txt": [
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\distlib\\LICENSE.txt",
+      ".venv\\Lib\\site-packages\\pip-26.1.1.dist-info\\licenses\\src\\pip\\_vendor\\distlib\\LICENSE.txt"
+    ],
+    "11325_LICENSE": [
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\distro\\LICENSE",
+      ".venv\\Lib\\site-packages\\pip-26.1.1.dist-info\\licenses\\src\\pip\\_vendor\\distro\\LICENSE"
+    ],
+    "1541_LICENSE.md": [
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\idna\\LICENSE.md",
+      ".venv\\Lib\\site-packages\\pip-26.1.1.dist-info\\licenses\\src\\pip\\_vendor\\idna\\LICENSE.md"
+    ],
+    "614_COPYING": [
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\msgpack\\COPYING",
+      ".venv\\Lib\\site-packages\\pip-26.1.1.dist-info\\licenses\\src\\pip\\_vendor\\msgpack\\COPYING"
+    ],
+    "1023_LICENSE": [
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\pkg_resources\\LICENSE",
+      ".venv\\Lib\\site-packages\\pip-26.1.1.dist-info\\licenses\\src\\pip\\_vendor\\pkg_resources\\LICENSE",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\backports.tarfile-1.2.0.dist-info\\LICENSE",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\jaraco.text-4.0.0.dist-info\\LICENSE",
+      ".venv\\Lib\\site-packages\\setuptools-82.0.1.dist-info\\licenses\\LICENSE"
+    ],
+    "9013_android.py": [
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\platformdirs\\android.py",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\platformdirs\\android.py"
+    ],
+    "9281_api.py": [
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\platformdirs\\api.py",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\platformdirs\\api.py"
+    ],
+    "1089_LICENSE": [
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\platformdirs\\LICENSE",
+      ".venv\\Lib\\site-packages\\pip-26.1.1.dist-info\\licenses\\src\\pip\\_vendor\\platformdirs\\LICENSE",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\platformdirs-4.4.0.dist-info\\licenses\\LICENSE"
+    ],
+    "6322_macos.py": [
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\platformdirs\\macos.py",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\platformdirs\\macos.py"
+    ],
+    "10458_unix.py": [
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\platformdirs\\unix.py",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\platformdirs\\unix.py"
+    ],
+    "704_version.py": [
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\platformdirs\\version.py",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\platformdirs\\version.py"
+    ],
+    "1331_LICENSE": [
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\pygments\\LICENSE",
+      ".venv\\Lib\\site-packages\\pip-26.1.1.dist-info\\licenses\\src\\pip\\_vendor\\pygments\\LICENSE",
+      ".venv\\Lib\\site-packages\\pygments-2.20.0.dist-info\\licenses\\LICENSE"
+    ],
+    "4176__mapping.py": [
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\pygments\\formatters\\_mapping.py",
+      ".venv\\Lib\\site-packages\\pygments\\formatters\\_mapping.py"
+    ],
+    "3312__mapping.py": [
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\pygments\\styles\\_mapping.py",
+      ".venv\\Lib\\site-packages\\pygments\\styles\\_mapping.py"
+    ],
+    "1081_LICENSE": [
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\pyproject_hooks\\LICENSE",
+      ".venv\\Lib\\site-packages\\pip-26.1.1.dist-info\\licenses\\src\\pip\\_vendor\\pyproject_hooks\\LICENSE"
+    ],
+    "10142_LICENSE": [
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\requests\\LICENSE",
+      ".venv\\Lib\\site-packages\\pip-26.1.1.dist-info\\licenses\\src\\pip\\_vendor\\requests\\LICENSE"
+    ],
+    "751_LICENSE": [
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\resolvelib\\LICENSE",
+      ".venv\\Lib\\site-packages\\pip-26.1.1.dist-info\\licenses\\src\\pip\\_vendor\\resolvelib\\LICENSE"
+    ],
+    "1056_LICENSE": [
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\rich\\LICENSE",
+      ".venv\\Lib\\site-packages\\pip-26.1.1.dist-info\\licenses\\src\\pip\\_vendor\\rich\\LICENSE"
+    ],
+    "1072_LICENSE": [
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\tomli\\LICENSE",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\tomli_w\\LICENSE",
+      ".venv\\Lib\\site-packages\\pip-26.1.1.dist-info\\licenses\\src\\pip\\_vendor\\tomli\\LICENSE",
+      ".venv\\Lib\\site-packages\\pip-26.1.1.dist-info\\licenses\\src\\pip\\_vendor\\tomli_w\\LICENSE",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\tomli-2.4.0.dist-info\\licenses\\LICENSE"
+    ],
+    "26_py.typed": [
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\tomli\\py.typed",
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\tomli_w\\py.typed",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\tomli\\py.typed"
+    ],
+    "254__types.py": [
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\tomli\\_types.py",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\tomli\\_types.py"
+    ],
+    "314___init__.py": [
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\tomli\\__init__.py",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\tomli\\__init__.py"
+    ],
+    "1086_LICENSE": [
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\truststore\\LICENSE",
+      ".venv\\Lib\\site-packages\\pip-26.1.1.dist-info\\licenses\\src\\pip\\_vendor\\truststore\\LICENSE"
+    ],
+    "1093_LICENSE.txt": [
+      ".venv\\Lib\\site-packages\\pip\\_vendor\\urllib3\\LICENSE.txt",
+      ".venv\\Lib\\site-packages\\pip-26.1.1.dist-info\\licenses\\LICENSE.txt",
+      ".venv\\Lib\\site-packages\\pip-26.1.1.dist-info\\licenses\\src\\pip\\_vendor\\urllib3\\LICENSE.txt"
+    ],
+    "7_top_level.txt": [
+      ".venv\\Lib\\site-packages\\pluggy-1.6.0.dist-info\\top_level.txt",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\jaraco.text-4.0.0.dist-info\\top_level.txt",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\jaraco_context-6.1.0.dist-info\\top_level.txt",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\jaraco_functools-4.4.0.dist-info\\top_level.txt"
+    ],
+    "87_WHEEL": [
+      ".venv\\Lib\\site-packages\\pygments-2.20.0.dist-info\\WHEEL",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\platformdirs-4.4.0.dist-info\\WHEEL"
+    ],
+    "198___init__.cpython-314.pyc": [
+      ".venv\\Lib\\site-packages\\setuptools\\tests\\compat\\__pycache__\\__init__.cpython-314.pyc",
+      ".venv\\Lib\\site-packages\\setuptools\\tests\\config\\__pycache__\\__init__.cpython-314.pyc"
+    ],
+    "2_INSTALLER": [
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\autocommand-2.2.2.dist-info\\INSTALLER",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\backports.tarfile-1.2.0.dist-info\\INSTALLER",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\importlib_metadata-8.7.1.dist-info\\INSTALLER",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\jaraco.text-4.0.0.dist-info\\INSTALLER",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\jaraco_context-6.1.0.dist-info\\INSTALLER",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\jaraco_functools-4.4.0.dist-info\\INSTALLER",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\more_itertools-10.8.0.dist-info\\INSTALLER",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\packaging-26.0.dist-info\\INSTALLER",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\platformdirs-4.4.0.dist-info\\INSTALLER",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\tomli-2.4.0.dist-info\\INSTALLER",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel-0.46.3.dist-info\\INSTALLER",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\zipp-3.23.0.dist-info\\INSTALLER"
+    ],
+    "92_WHEEL": [
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\autocommand-2.2.2.dist-info\\WHEEL",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\backports.tarfile-1.2.0.dist-info\\WHEEL"
+    ],
+    "1076_LICENSE": [
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\jaraco_context-6.1.0.dist-info\\licenses\\LICENSE",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\jaraco_functools-4.4.0.dist-info\\licenses\\LICENSE",
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\zipp-3.23.0.dist-info\\licenses\\LICENSE"
+    ],
+    "1102_bdist_wheel.py": [
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\bdist_wheel.py",
+      ".venv\\Lib\\site-packages\\wheel\\bdist_wheel.py"
+    ],
+    "16712_macosx_libfile.py": [
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\macosx_libfile.py",
+      ".venv\\Lib\\site-packages\\wheel\\macosx_libfile.py"
+    ],
+    "757_metadata.py": [
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\metadata.py",
+      ".venv\\Lib\\site-packages\\wheel\\metadata.py"
+    ],
+    "21729__bdist_wheel.py": [
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\_bdist_wheel.py",
+      ".venv\\Lib\\site-packages\\wheel\\_bdist_wheel.py"
+    ],
+    "6188__metadata.py": [
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\_metadata.py",
+      ".venv\\Lib\\site-packages\\wheel\\_metadata.py"
+    ],
+    "781__setuptools_logging.py": [
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\_setuptools_logging.py",
+      ".venv\\Lib\\site-packages\\wheel\\_setuptools_logging.py"
+    ],
+    "59___init__.py": [
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\__init__.py",
+      ".venv\\Lib\\site-packages\\wheel\\__init__.py"
+    ],
+    "12743_convert.py": [
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\_commands\\convert.py",
+      ".venv\\Lib\\site-packages\\wheel\\_commands\\convert.py"
+    ],
+    "3078_pack.py": [
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\_commands\\pack.py",
+      ".venv\\Lib\\site-packages\\wheel\\_commands\\pack.py"
+    ],
+    "4775_tags.py": [
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\_commands\\tags.py",
+      ".venv\\Lib\\site-packages\\wheel\\_commands\\tags.py"
+    ],
+    "1016_unpack.py": [
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel\\_commands\\unpack.py",
+      ".venv\\Lib\\site-packages\\wheel\\_commands\\unpack.py"
+    ],
+    "110_entry_points.txt": [
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel-0.46.3.dist-info\\entry_points.txt",
+      ".venv\\Lib\\site-packages\\wheel-0.47.0.dist-info\\entry_points.txt"
+    ],
+    "1107_LICENSE.txt": [
+      ".venv\\Lib\\site-packages\\setuptools\\_vendor\\wheel-0.46.3.dist-info\\licenses\\LICENSE.txt",
+      ".venv\\Lib\\site-packages\\wheel-0.47.0.dist-info\\licenses\\LICENSE.txt"
+    ],
+    "7_test1.txt": [
+      "tests\\fixtures\\sample_tree\\test1.txt",
+      "tests\\fixtures\\sample_tree\\subdir\\test1.txt"
+    ]
+  },
+  "errors": []
+}

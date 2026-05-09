@@ -1,0 +1,17 @@
+README.md
+pyproject.toml
+src/folder_archaeologist/__init__.py
+src/folder_archaeologist/__main__.py
+src/folder_archaeologist/analyzer.py
+src/folder_archaeologist/cli.py
+src/folder_archaeologist/report.py
+src/folder_archaeologist/scanner.py
+src/folder_archaeologist.egg-info/PKG-INFO
+src/folder_archaeologist.egg-info/SOURCES.txt
+src/folder_archaeologist.egg-info/dependency_links.txt
+src/folder_archaeologist.egg-info/entry_points.txt
+src/folder_archaeologist.egg-info/requires.txt
+src/folder_archaeologist.egg-info/top_level.txt
+tests/test_analyzer.py
+tests/test_report.py
+tests/test_scanner.py

@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "folder-archaeologist"
+version = "0.1.0"
+description = "A read-only local folder analysis tool."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "Gemini CLI" }
+]
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.scripts]
+folder-archaeologist = "folder_archaeologist.cli:main"
