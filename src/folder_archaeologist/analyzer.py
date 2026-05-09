@@ -5,11 +5,12 @@ from typing import List, Dict, Any
 from .scanner import FileInfo, FolderInfo
 
 class Analyzer:
-    def __init__(self, files: List[FileInfo], folders: List[FolderInfo], top_n: int = 20, min_size: int = 0):
+    def __init__(self, files: List[FileInfo], folders: List[FolderInfo], top_n: int = 20, min_size: int = 0, hash_duplicates: bool = False):
         self.files = files
         self.folders = folders
         self.top_n = top_n
         self.min_size = min_size
+        self.hash_duplicates = hash_duplicates
 
     def analyze(self) -> Dict[str, Any]:
         total_files = len(self.files)
@@ -36,14 +37,32 @@ class Analyzer:
         # Empty Folders
         empty_folders = [f.path for f in self.folders if f.is_empty]
 
-        # Duplicates (Same size + same name) - filtered by min_size
-        duplicates = defaultdict(list)
-        for f in filtered_files:
-            duplicates[(f.size, f.path.name)].append(f.path)
+        # Duplicates
+        duplicate_candidates = {}
+        if self.hash_duplicates:
+            # Hash-based duplicates: same size AND same hash
+            size_groups = defaultdict(list)
+            for f in filtered_files:
+                if f.size > 0: # Ignore zero-byte files for hash-based dupe detection to avoid noise? Usually yes.
+                    size_groups[f.size].append(f)
+            
+            hash_groups = defaultdict(list)
+            for size, files in size_groups.items():
+                if len(files) > 1:
+                    for f in files:
+                        h = f.calculate_sha256()
+                        if h:
+                            hash_groups[(size, h)].append(f.path)
+            
+            duplicate_candidates = {k: v for k, v in hash_groups.items() if len(v) > 1}
+        else:
+            # Default: Same size + same name
+            duplicates = defaultdict(list)
+            for f in filtered_files:
+                duplicates[(f.size, f.path.name)].append(f.path)
+            duplicate_candidates = {k: v for k, v in duplicates.items() if len(v) > 1}
         
-        duplicate_candidates = {k: v for k, v in duplicates.items() if len(v) > 1}
-        # Limit duplicate candidates as well? The requirements say "ranking/display candidates" should be limited by top_n where applicable.
-        # "重複候補表示" is listed under top_n.
+        # Sort and limit
         sorted_duplicates = sorted(duplicate_candidates.items(), key=lambda x: x[0][0], reverse=True)[:self.top_n]
         duplicate_candidates = dict(sorted_duplicates)
 
@@ -53,8 +72,9 @@ class Analyzer:
                 "total_folders": total_folders,
                 "total_size": total_size,
                 "top_n": self.top_n,
-                "max_depth": getattr(self, 'max_depth', None), # Placeholder if needed, but cli handles it
-                "min_size": self.min_size
+                "max_depth": getattr(self, 'max_depth', None),
+                "min_size": self.min_size,
+                "hash_duplicates": self.hash_duplicates
             },
             "extensions_count": sorted(ext_counter.items(), key=lambda x: x[1], reverse=True)[:self.top_n],
             "extensions_size": sorted(ext_size.items(), key=lambda x: x[1], reverse=True)[:self.top_n],

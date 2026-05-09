@@ -21,11 +21,13 @@ def main():
     parser.add_argument("target", help="Target folder to analyze")
     parser.add_argument("--report", help="Path to save Markdown report")
     parser.add_argument("--json", help="Path to save JSON report")
+    parser.add_argument("--html-report", help="Path to save HTML report")
     parser.add_argument("--no-default-excludes", action="store_true", help="Disable default excludes")
     parser.add_argument("--exclude", action="append", help="Additional folders to exclude (can be specified multiple times)")
     parser.add_argument("--top-n", type=int, default=20, help="Number of items in rankings (default: 20)")
     parser.add_argument("--max-depth", type=int, help="Maximum recursion depth (0: root only, default: unlimited)")
     parser.add_argument("--min-size", type=int, default=0, help="Minimum file size in bytes to be included in rankings (default: 0)")
+    parser.add_argument("--hash-duplicates", action="store_true", help="Identify duplicates by SHA-256 hash (same size only)")
     
     args = parser.parse_args()
     
@@ -61,7 +63,8 @@ def main():
     settings = {
         "top_n": args.top_n,
         "max_depth": args.max_depth,
-        "min_size": args.min_size
+        "min_size": args.min_size,
+        "hash_duplicates": args.hash_duplicates
     }
 
     scanner = Scanner(args.target, excludes=excludes, max_depth=args.max_depth)
@@ -72,7 +75,13 @@ def main():
         sys.exit(1)
         
     stats = scanner.get_stats()
-    analyzer = Analyzer(stats['files'], stats['folders'], top_n=args.top_n, min_size=args.min_size)
+    analyzer = Analyzer(
+        stats['files'], 
+        stats['folders'], 
+        top_n=args.top_n, 
+        min_size=args.min_size,
+        hash_duplicates=args.hash_duplicates
+    )
     analysis = analyzer.analyze()
     
     reporter = Reporter(analysis, stats['errors'], excludes=excludes, settings=settings)
@@ -94,6 +103,14 @@ def main():
             print(f"JSON report saved to {json_path}")
         except Exception as e:
             print(f"Error saving JSON report: {e}")
+
+    if args.html_report:
+        html_path = Path(args.html_report)
+        try:
+            html_path.write_text(reporter.to_html(), encoding='utf-8')
+            print(f"HTML report saved to {html_path}")
+        except Exception as e:
+            print(f"Error saving HTML report: {e}")
 
 if __name__ == "__main__":
     main()

@@ -1,4 +1,5 @@
 import os
+import hashlib
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -11,6 +12,22 @@ class FileInfo:
     mtime: float
     extension: str
     is_accessible: bool = True
+    sha256_hash: Optional[str] = None
+
+    def calculate_sha256(self, chunk_size: int = 65536):
+        """Calculate SHA-256 hash in chunks for memory efficiency."""
+        if not self.is_accessible:
+            return None
+        sha256 = hashlib.sha256()
+        try:
+            with open(self.path, "rb") as f:
+                while chunk := f.read(chunk_size):
+                    sha256.update(chunk)
+            self.sha256_hash = sha256.hexdigest()
+            return self.sha256_hash
+        except (PermissionError, OSError):
+            self.is_accessible = False
+            return None
 
 @dataclass
 class FolderInfo:

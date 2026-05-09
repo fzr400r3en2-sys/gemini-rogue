@@ -1,46 +1,63 @@
 {
   "summary": {
-    "total_files": 20,
+    "total_files": 25,
     "total_folders": 6,
-    "total_size": 31233,
+    "total_size": 58135,
     "top_n": 10,
     "max_depth": null,
-    "min_size": 1024
+    "min_size": 1024,
+    "hash_duplicates": true
   },
   "extensions_count": [
     [
       ".py",
-      12
+      13
     ],
     [
       ".txt",
       5
     ],
     [
+      "",
+      2
+    ],
+    [
+      ".md",
+      2
+    ],
+    [
       ".toml",
       1
     ],
     [
-      ".md",
+      ".html",
       1
     ],
     [
-      "",
+      ".json",
       1
     ]
   ],
   "extensions_size": [
     [
       ".py",
-      26217
+      36987
     ],
     [
-      "",
-      2063
+      ".html",
+      6275
     ],
     [
       ".md",
-      1796
+      6213
+    ],
+    [
+      ".json",
+      5310
+    ],
+    [
+      "",
+      2193
     ],
     [
       ".txt",
@@ -54,151 +71,171 @@
   "years_count": [
     [
       2026,
-      20
+      25
     ]
   ],
   "top_large": [
     {
       "path": "src\\folder_archaeologist\\report.py",
-      "size": 6147,
-      "mtime": 1778343095.6808772,
+      "size": 12194,
+      "mtime": 1778343584.514203,
       "extension": ".py",
-      "is_accessible": true
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "report.html",
+      "size": 6275,
+      "mtime": 1778343726.2737968,
+      "extension": ".html",
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "report.json",
+      "size": 5310,
+      "mtime": 1778343726.269171,
+      "extension": ".json",
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "src\\folder_archaeologist\\cli.py",
+      "size": 4193,
+      "mtime": 1778343537.243723,
+      "extension": ".py",
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "src\\folder_archaeologist\\scanner.py",
+      "size": 3799,
+      "mtime": 1778343511.0850203,
+      "extension": ".py",
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "src\\folder_archaeologist\\analyzer.py",
+      "size": 3792,
+      "mtime": 1778343524.1270878,
+      "extension": ".py",
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "README.md",
+      "size": 3744,
+      "mtime": 1778343596.8433197,
+      "extension": ".md",
+      "is_accessible": true,
+      "sha256_hash": null
     },
     {
       "path": "tests\\test_new_features.py",
       "size": 3708,
       "mtime": 1778343163.9768324,
       "extension": ".py",
-      "is_accessible": true
+      "is_accessible": true,
+      "sha256_hash": null
     },
     {
-      "path": "src\\folder_archaeologist\\cli.py",
-      "size": 3548,
-      "mtime": 1778343107.2523315,
+      "path": "tests\\test_final.py",
+      "size": 2676,
+      "mtime": 1778343629.760453,
       "extension": ".py",
-      "is_accessible": true
+      "is_accessible": true,
+      "sha256_hash": null
     },
     {
-      "path": "src\\folder_archaeologist\\scanner.py",
-      "size": 3166,
-      "mtime": 1778343150.4537487,
-      "extension": ".py",
-      "is_accessible": true
-    },
-    {
-      "path": "src\\folder_archaeologist\\analyzer.py",
-      "size": 3023,
-      "mtime": 1778343078.0202444,
-      "extension": ".py",
-      "is_accessible": true
-    },
-    {
-      "path": "tests\\test_excludes.py",
-      "size": 2394,
-      "mtime": 1778342727.674198,
-      "extension": ".py",
-      "is_accessible": true
-    },
-    {
-      "path": "src\\folder_archaeologist.egg-info\\PKG-INFO",
-      "size": 2063,
-      "mtime": 1778342462.7251763,
-      "extension": "",
-      "is_accessible": true
-    },
-    {
-      "path": "README.md",
-      "size": 1796,
-      "mtime": 1778341674.4423325,
+      "path": "report.md",
+      "size": 2469,
+      "mtime": 1778343726.269171,
       "extension": ".md",
-      "is_accessible": true
-    },
-    {
-      "path": "tests\\test_analyzer.py",
-      "size": 1345,
-      "mtime": 1778341711.0604997,
-      "extension": ".py",
-      "is_accessible": true
-    },
-    {
-      "path": "tests\\test_validation.py",
-      "size": 1147,
-      "mtime": 1778343129.171638,
-      "extension": ".py",
-      "is_accessible": true
+      "is_accessible": true,
+      "sha256_hash": null
     }
   ],
   "top_old": [
     {
-      "path": "README.md",
-      "size": 1796,
-      "mtime": 1778341674.4423325,
-      "extension": ".md",
-      "is_accessible": true
-    },
-    {
       "path": "tests\\test_analyzer.py",
       "size": 1345,
       "mtime": 1778341711.0604997,
       "extension": ".py",
-      "is_accessible": true
+      "is_accessible": true,
+      "sha256_hash": null
     },
     {
       "path": "src\\folder_archaeologist.egg-info\\PKG-INFO",
       "size": 2063,
       "mtime": 1778342462.7251763,
       "extension": "",
-      "is_accessible": true
+      "is_accessible": true,
+      "sha256_hash": null
     },
     {
       "path": "tests\\test_excludes.py",
       "size": 2394,
       "mtime": 1778342727.674198,
       "extension": ".py",
-      "is_accessible": true
-    },
-    {
-      "path": "src\\folder_archaeologist\\analyzer.py",
-      "size": 3023,
-      "mtime": 1778343078.0202444,
-      "extension": ".py",
-      "is_accessible": true
-    },
-    {
-      "path": "src\\folder_archaeologist\\report.py",
-      "size": 6147,
-      "mtime": 1778343095.6808772,
-      "extension": ".py",
-      "is_accessible": true
-    },
-    {
-      "path": "src\\folder_archaeologist\\cli.py",
-      "size": 3548,
-      "mtime": 1778343107.2523315,
-      "extension": ".py",
-      "is_accessible": true
+      "is_accessible": true,
+      "sha256_hash": null
     },
     {
       "path": "tests\\test_validation.py",
       "size": 1147,
       "mtime": 1778343129.171638,
       "extension": ".py",
-      "is_accessible": true
-    },
-    {
-      "path": "src\\folder_archaeologist\\scanner.py",
-      "size": 3166,
-      "mtime": 1778343150.4537487,
-      "extension": ".py",
-      "is_accessible": true
+      "is_accessible": true,
+      "sha256_hash": null
     },
     {
       "path": "tests\\test_new_features.py",
       "size": 3708,
       "mtime": 1778343163.9768324,
       "extension": ".py",
-      "is_accessible": true
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "src\\folder_archaeologist\\scanner.py",
+      "size": 3799,
+      "mtime": 1778343511.0850203,
+      "extension": ".py",
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "src\\folder_archaeologist\\analyzer.py",
+      "size": 3792,
+      "mtime": 1778343524.1270878,
+      "extension": ".py",
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "src\\folder_archaeologist\\cli.py",
+      "size": 4193,
+      "mtime": 1778343537.243723,
+      "extension": ".py",
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "src\\folder_archaeologist\\report.py",
+      "size": 12194,
+      "mtime": 1778343584.514203,
+      "extension": ".py",
+      "is_accessible": true,
+      "sha256_hash": null
+    },
+    {
+      "path": "README.md",
+      "size": 3744,
+      "mtime": 1778343596.8433197,
+      "extension": ".md",
+      "is_accessible": true,
+      "sha256_hash": null
     }
   ],
   "empty_folders": [
@@ -219,6 +256,7 @@
   "settings": {
     "top_n": 10,
     "max_depth": 2,
-    "min_size": 1024
+    "min_size": 1024,
+    "hash_duplicates": true
   }
 }
