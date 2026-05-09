@@ -594,7 +594,20 @@ function wipeAllStorage() {
 // ---- ランタイム統計 ----
 let runStats = null;
 function newRunStats() {
-  return { kills: 0, maxDamage: 0, totalGoldGained: 0, lastDamageSource: "" };
+  return {
+    kills: 0, maxDamage: 0, totalGoldGained: 0, lastDamageSource: "",
+    // クラス特技の発動回数（旧セーブ互換のため normalizeRunStats で補完）
+    warriorCounters: 0,
+    rogueTrapAvoids: 0,
+    mageScrollSaves: 0,
+  };
+}
+// 旧フォーマットのrunStatsを安全に正規化する。古いキーは温存しつつ
+// 不足しているフィールドだけ追加する。
+function normalizeRunStats(rs) {
+  const base = newRunStats();
+  if (!rs || typeof rs !== "object") return base;
+  return Object.assign(base, rs);
 }
 function setLastDamage(src) { if (runStats && src) runStats.lastDamageSource = src; }
 function trackKill() {
@@ -721,6 +734,20 @@ function addGold(p, g) {
   if (g <= 0) return;
   p.gold += g;
   trackGoldGain(g);
+}
+
+// ---- クラス補正ヘルパ ----
+const ROGUE_BUY_RATE  = 0.9;   // 仕入れ -10%
+const ROGUE_SELL_RATE = 1.1;   // 売値 +10%
+function buyPrice(item) {
+  const base = ITEMS[item].price;
+  if (player && player.cls === "盗賊") return Math.max(1, Math.floor(base * ROGUE_BUY_RATE));
+  return base;
+}
+function sellPrice(item) {
+  const base = Math.floor(ITEMS[item].price / 2);
+  if (player && player.cls === "盗賊") return Math.floor(base * ROGUE_SELL_RATE);
+  return base;
 }
 
 // ====================================================================
@@ -908,12 +935,19 @@ function useItem(p, item, inCombat = false, target = null) {
       if (!inCombat) return [false, "戦闘中にしか使えない。"];
       removeOne(p.inventory, item);
       return [true, "煙玉を投げつけた！ 視界が遮られる。"];
-    case "magic":
+    case "magic": {
       if (!inCombat || !target) return [false, "戦闘中にしか使えない。"];
-      target.hp -= info.power;
-      trackDamageDealt(info.power);
-      removeOne(p.inventory, item);
-      return [true, `魔法の巻物が炸裂！ ${target.name} に ${info.power} のダメージ！`];
+      const isMage = p.cls === "魔導士";
+      const power  = info.power + (isMage ? 10 : 0);
+      target.hp  -= power;
+      trackDamageDealt(power);
+      // 魔導士の20%確率「巻物温存」
+      const conserve = isMage && Math.random() < 0.20;
+      if (!conserve) removeOne(p.inventory, item);
+      else if (runStats) runStats.mageScrollSaves += 1;
+      const tail = conserve ? "  魔導士の知恵で巻物は崩れずに残った！" : "";
+      return [true, `魔法の巻物が炸裂！ ${target.name} に ${power} のダメージ！${tail}`];
+    }
     case "level_up": {
       p.exp = needExp(p);
       const msgs = gainExp(p, 0);
@@ -942,6 +976,9 @@ async function openInventory(inCombat = false, target = null) {
   const [consumed, msg] = useItem(player, item, inCombat, target);
   tell(msg, consumed ? "shop" : "dim");
   renderStatus();
+  // 戦闘中のアイテム使用は combat() の終了時に saveGame() するため
+  // ここでは戦闘外のアイテム使用のみ保存する（戦闘ターン中保存は避ける）
+  if (consumed && !inCombat) saveGame();
   return consumed ? item : null;
 }
 
@@ -998,11 +1035,17 @@ async function combat(m, canFlee = true) {
     } else if (idx === 2) {
       const consumed = await openInventory(true, m);
       if (consumed === null) skipEnemy = true;
-      else if (consumed === "煙玉") { tell(`${m.name} を撒いて逃げ切った！`, "shop"); return false; }
+      else if (consumed === "煙玉") { tell(`${m.name} を撒いて逃げ切った！`, "shop"); saveGame(); return false; }
       else if (m.hp <= 0) break;
     } else if (idx === 3) {
-      const chance = 0.4 + player.level * 0.03;
-      if (Math.random() < chance) { tell(`${m.name} を撒いて逃げ切った！`, "shop"); return false; }
+      const isRogue = player.cls === "盗賊";
+      const chance = 0.4 + player.level * 0.03 + (isRogue ? 0.20 : 0);
+      if (Math.random() < chance) {
+        if (isRogue) tell("盗賊の脚で素早く距離を取った。", "shop");
+        tell(`${m.name} を撒いて逃げ切った！`, "shop");
+        saveGame();
+        return false;
+      }
       tell("逃げられなかった！", "danger");
     }
 
@@ -1023,6 +1066,15 @@ async function combat(m, canFlee = true) {
           tell("あなたは毒に侵された！", "danger");
         }
       }
+      // 戦士の反撃：防御選択中・敵が攻撃を当てた直後・30%発動
+      // 反撃ダメージは通常攻撃のおよそ50%（クリ・特効乗せず、ボスにも有効）
+      if (defending && player.cls === "戦士" && m.hp > 0 && player.hp > 0 && Math.random() < 0.30) {
+        const cdmg = Math.max(1, Math.floor(calcDamage(pAtk(player), m.defense) * 0.5));
+        m.hp -= cdmg;
+        trackDamageDealt(cdmg);
+        if (runStats) runStats.warriorCounters += 1;
+        tell(`戦士のカウンター！ ${m.name} に ${cdmg} の反撃ダメージ。`, "shop");
+      }
     }
     for (const msg of tickEffects(player)) tell(msg, "dim");
     renderStatus();
@@ -1039,6 +1091,7 @@ async function combat(m, canFlee = true) {
   }
   tellEvent("勝利！", lines.join("\n"), "victory");
   renderStatus();
+  saveGame();
   return true;
 }
 
@@ -1071,6 +1124,12 @@ async function eventTreasure() {
   ]);
   if (idx === 2) return;
   let trapped = Math.random() < 0.20 + player.floor * 0.01;
+  // 盗賊補正：罠が仕込まれていても50%で察知して回避（実質発動率半減）
+  if (trapped && player.cls === "盗賊" && Math.random() < 0.5) {
+    trapped = false;
+    if (runStats) runStats.rogueTrapAvoids += 1;
+    tell("盗賊の勘 — 細工の匂いを察知し、針を弾き返した。", "shop");
+  }
   if (idx === 1) {
     if (trapped) { tell("蹴り倒した宝箱から針が飛び出すが、当たらなかった！", "shop"); trapped = false; }
     else if (Math.random() < 0.4) { tell("中身が壊れてしまった…", "dim"); return; }
@@ -1158,17 +1217,23 @@ async function eventEmpty() {
 
 async function eventMerchant() {
   tellEvent("行商人", "フードを被った行商人が荷物を広げている。\n「ふむ、生きて帰れる客は久しぶりだ。何を見ていく？」", "shop");
+  if (player.cls === "盗賊") {
+    tell("「お、盗賊か。話の分かる客は値段の話も分かるってもんだ。」（仕入れ-10% / 売値+10%）", "shop");
+  }
   let pool = ["ポーション", "ハイポーション", "毒消し草", "力の薬", "煙玉", "魔法の巻物", "鉄の剣", "鋼の剣", "革の鎧", "鎖帷子"];
   if (player.floor >= 8)  pool = pool.concat(["炎の剣", "鋼の鎧", "エリクサー"]);
   if (player.floor >= 14) pool = pool.concat(["竜殺しの槍", "聖なる鎧"]);
   const stock = Array.from({ length: 5 }, () => choice(pool));
 
   while (true) {
-    const opts = stock.map(it => ({
-      label: `${it}  ${ITEMS[it].price}G`,
-      desc: ITEMS[it].desc,
-      disabled: player.gold < ITEMS[it].price,
-    }));
+    const opts = stock.map(it => {
+      const bp = buyPrice(it);
+      return {
+        label: `${it}  ${bp}G`,
+        desc: ITEMS[it].desc,
+        disabled: player.gold < bp,
+      };
+    });
     opts.push({ label: `売る`, desc: `所持品 ${player.inventory.length} 個` });
     opts.push({ label: "立ち去る" });
     const idx = await ask(opts);
@@ -1176,25 +1241,28 @@ async function eventMerchant() {
     if (idx === opts.length - 2) {
       if (player.inventory.length === 0) { tell("売れる物が無い。", "dim"); continue; }
       const items = [...new Set(player.inventory)];
-      const sopts = items.map(it => ({ label: `${it} → ${Math.floor(ITEMS[it].price / 2)}G` }));
+      const sopts = items.map(it => ({ label: `${it} → ${sellPrice(it)}G` }));
       sopts.push({ label: "やめる" });
       const j = await ask(sopts);
       if (j === sopts.length - 1) continue;
       const sold = items[j];
+      const sp = sellPrice(sold);
       removeOne(player.inventory, sold);
-      addGold(player, Math.floor(ITEMS[sold].price / 2));
-      tell(`${sold} を ${Math.floor(ITEMS[sold].price / 2)}G で売却した。`, "gold");
+      addGold(player, sp);
+      tell(`${sold} を ${sp}G で売却した。`, "gold");
       renderStatus();
+      saveGame();
       continue;
     }
     const item = stock[idx];
-    const price = ITEMS[item].price;
+    const price = buyPrice(item);
     if (player.gold < price) { tell("「金が足りないようだな。」", "danger"); continue; }
     player.gold -= price;
     player.inventory.push(item);
     stock.splice(idx, 1);
     tell(`${item} を ${price}G で購入した。`, "gold");
     renderStatus();
+    saveGame();
     if (stock.length === 0) { tell("「これで打ち止めだ。気をつけてな。」"); return; }
   }
 }
@@ -1244,11 +1312,18 @@ async function eventFountain() {
     tell("古の知恵が流れ込んできた。 " + msgs.join(" "), "shop");
     return;
   }
+  // 魔導士補正：良効果ゾーン(0..0.75)を 0..0.85 に拡張、悪効果ゾーンは縮小
+  const isMage = player.cls === "魔導士";
+  if (isMage) tell("魔導士の素養が泉の力を引き寄せる…", "shop");
+  const t1 = isMage ? 0.34 : 0.30;
+  const t2 = isMage ? 0.62 : 0.55;
+  const t3 = isMage ? 0.85 : 0.75;
+  const t4 = isMage ? 0.93 : 0.90;
   const r = Math.random();
-  if (r < 0.30) { player.max_hp += 10; player.hp = player.max_hp; tell("最大HPが10上昇した！", "heal"); }
-  else if (r < 0.55) { player.base_atk += 2; tell("攻撃力が永続的に2上昇した！", "heal"); }
-  else if (r < 0.75) { player.base_def += 2; tell("防御力が永続的に2上昇した！", "heal"); }
-  else if (r < 0.90) {
+  if (r < t1) { player.max_hp += 10; player.hp = player.max_hp; tell("最大HPが10上昇した！", "heal"); }
+  else if (r < t2) { player.base_atk += 2; tell("攻撃力が永続的に2上昇した！", "heal"); }
+  else if (r < t3) { player.base_def += 2; tell("防御力が永続的に2上昇した！", "heal"); }
+  else if (r < t4) {
     const l = randInt(5, 15);
     player.hp = Math.max(1, player.hp - l);
     setLastDamage("腐った水");
@@ -1421,7 +1496,7 @@ async function resumeGame() {
   }
   try {
     player   = data.player;
-    runStats = data.runStats || newRunStats();
+    runStats = normalizeRunStats(data.runStats);
     if (typeof player.hp !== "number" || player.hp <= 0) throw new Error("invalid save");
     clearNarrative();
     tellEvent("冒険の再開", `${player.name}（${player.cls}）は B${player.floor}F で目を覚ました。`);
@@ -1509,6 +1584,15 @@ function buildEndCard(kind, reason) {
     ? `<div class="badge-list">${newlyEarned.map(d => `<span class="badge">🏆 ${escapeHtml(d.name)}</span>`).join("")}</div>`
     : "";
 
+  // クラス特技の発動回数（0件なら非表示）
+  const skills = [];
+  if (runStats.warriorCounters)  skills.push(["戦士の反撃",     `${runStats.warriorCounters} 回`]);
+  if (runStats.rogueTrapAvoids)  skills.push(["盗賊の罠回避",   `${runStats.rogueTrapAvoids} 回`]);
+  if (runStats.mageScrollSaves)  skills.push(["魔導士の巻物温存", `${runStats.mageScrollSaves} 回`]);
+  const skillsBlock = skills.length
+    ? `<h3>クラス特技</h3><table>${skills.map(([k,v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("")}</table>`
+    : "";
+
   return `<div class="endcard">
     <h1 class="${titleClass}">${titleText}</h1>
     <div class="reason">${escapeHtml(reason)}</div>
@@ -1523,6 +1607,7 @@ function buildEndCard(kind, reason) {
       <tr><td>累計獲得G</td><td>${runStats.totalGoldGained}G</td></tr>
       <tr><td>総合スコア</td><td class="score">${score}</td></tr>
     </table>
+    ${skillsBlock}
     ${badges}
     <p style="margin-top:14px; font-style:italic; color:var(--dim);">${tagline}</p>
   </div>`;
@@ -1606,6 +1691,8 @@ async function gameLoop() {
       } else {
         await pickEvent()();
       }
+      // イベント解決直後セーブ：HP/所持金/アイテム/EXP/装備の最新を反映
+      if (player.hp > 0) saveGame();
       if (player.hp > 0 && player.effects.length > 0) {
         for (const msg of tickEffects(player)) tell(msg, "dim");
         renderStatus();
