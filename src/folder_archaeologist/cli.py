@@ -23,12 +23,26 @@ def main():
     parser.add_argument("--json", help="Path to save JSON report")
     parser.add_argument("--no-default-excludes", action="store_true", help="Disable default excludes")
     parser.add_argument("--exclude", action="append", help="Additional folders to exclude (can be specified multiple times)")
+    parser.add_argument("--top-n", type=int, default=20, help="Number of items in rankings (default: 20)")
+    parser.add_argument("--max-depth", type=int, help="Maximum recursion depth (0: root only, default: unlimited)")
+    parser.add_argument("--min-size", type=int, default=0, help="Minimum file size in bytes to be included in rankings (default: 0)")
     
     args = parser.parse_args()
     
     target_path = Path(args.target)
     if not target_path.is_dir():
         print(f"Error: {target_path} is not a directory or does not exist.")
+        sys.exit(1)
+
+    # Validation
+    if args.top_n <= 0:
+        print("Error: --top-n must be greater than 0.")
+        sys.exit(1)
+    if args.max_depth is not None and args.max_depth < 0:
+        print("Error: --max-depth must be 0 or greater.")
+        sys.exit(1)
+    if args.min_size < 0:
+        print("Error: --min-size must be 0 or greater.")
         sys.exit(1)
 
     # Prepare exclusion list
@@ -44,7 +58,13 @@ def main():
     if excludes:
         print(f"Excluding: {', '.join(excludes)}")
         
-    scanner = Scanner(args.target, excludes=excludes)
+    settings = {
+        "top_n": args.top_n,
+        "max_depth": args.max_depth,
+        "min_size": args.min_size
+    }
+
+    scanner = Scanner(args.target, excludes=excludes, max_depth=args.max_depth)
     try:
         scanner.scan()
     except Exception as e:
@@ -52,10 +72,10 @@ def main():
         sys.exit(1)
         
     stats = scanner.get_stats()
-    analyzer = Analyzer(stats['files'], stats['folders'])
+    analyzer = Analyzer(stats['files'], stats['folders'], top_n=args.top_n, min_size=args.min_size)
     analysis = analyzer.analyze()
     
-    reporter = Reporter(analysis, stats['errors'], excludes=excludes)
+    reporter = Reporter(analysis, stats['errors'], excludes=excludes, settings=settings)
     
     reporter.to_stdout()
     

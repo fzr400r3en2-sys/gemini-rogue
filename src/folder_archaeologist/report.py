@@ -11,10 +11,11 @@ def format_size(size: int) -> str:
     return f"{size:.2f} PB"
 
 class Reporter:
-    def __init__(self, analysis: Dict[str, Any], errors: List[str], excludes: List[str] = None):
+    def __init__(self, analysis: Dict[str, Any], errors: List[str], excludes: List[str] = None, settings: Dict[str, Any] = None):
         self.analysis = analysis
         self.errors = errors
         self.excludes = excludes or []
+        self.settings = settings or {}
 
     def to_stdout(self):
         summary = self.analysis['summary']
@@ -24,6 +25,11 @@ class Reporter:
         print(f"Total Size:    {format_size(summary['total_size'])}")
         if self.excludes:
             print(f"Excluded:      {', '.join(self.excludes)}")
+        
+        settings = self.settings
+        print(f"Top-N:         {settings.get('top_n')}")
+        print(f"Max-Depth:     {settings.get('max_depth') if settings.get('max_depth') is not None else 'Unlimited'}")
+        print(f"Min-Size:      {format_size(settings.get('min_size', 0))}")
         print("==================================\n")
 
     def to_json(self) -> str:
@@ -31,10 +37,14 @@ class Reporter:
         serializable = self._make_serializable(self.analysis)
         serializable['errors'] = self.errors
         serializable['excludes'] = self.excludes
+        serializable['settings'] = self.settings
         return json.dumps(serializable, indent=2, ensure_ascii=False)
 
     def to_markdown(self) -> str:
         summary = self.analysis['summary']
+        settings = self.settings
+        top_n = settings.get('top_n', 20)
+        
         lines = [
             "# Folder Archaeology Report",
             f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
@@ -46,6 +56,14 @@ class Reporter:
             ""
         ]
         
+        lines.extend([
+            "## Settings",
+            f"- **Top-N**: {top_n}",
+            f"- **Max-Depth**: {settings.get('max_depth') if settings.get('max_depth') is not None else 'Unlimited'}",
+            f"- **Min-Size**: {format_size(settings.get('min_size', 0))}",
+            ""
+        ])
+
         if self.excludes:
             lines.extend([
                 "## Exclusion Settings",
@@ -57,20 +75,20 @@ class Reporter:
             lines.append("")
 
         lines.extend([
-            "## Extensions by Count (Top 10)",
+            f"## Extensions by Count (Top {top_n})",
             "| Extension | Count |",
             "| --- | --- |"
         ])
-        for ext, count in self.analysis['extensions_count'][:10]:
+        for ext, count in self.analysis['extensions_count']:
             lines.append(f"| {ext or '(no extension)'} | {count} |")
         
         lines.extend([
             "",
-            "## Extensions by Size (Top 10)",
+            f"## Extensions by Size (Top {top_n})",
             "| Extension | Size |",
             "| --- | --- |"
         ])
-        for ext, size in self.analysis['extensions_size'][:10]:
+        for ext, size in self.analysis['extensions_size']:
             lines.append(f"| {ext or '(no extension)'} | {format_size(size)} |")
 
         lines.extend([
@@ -84,7 +102,7 @@ class Reporter:
 
         lines.extend([
             "",
-            "## Top 20 Large Files",
+            f"## Top {top_n} Large Files",
             "| File Path | Size | Last Modified |",
             "| --- | --- | --- |"
         ])
@@ -94,7 +112,7 @@ class Reporter:
 
         lines.extend([
             "",
-            "## Top 20 Oldest Files",
+            f"## Top {top_n} Oldest Files",
             "| File Path | Size | Last Modified |",
             "| --- | --- | --- |"
         ])
@@ -114,7 +132,7 @@ class Reporter:
 
         lines.extend([
             "",
-            "## Duplicate Candidates (Same Name & Size)",
+            f"## Duplicate Candidates (Top {top_n} by Size)",
             "| Name & Size | Paths |",
             "| --- | --- |"
         ])
