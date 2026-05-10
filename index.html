@@ -430,6 +430,27 @@ const UPGRADES = [
   { id: "amulet",  name: "旅の護符", maxLv: 1, costs: [10],      desc: "1冒険1回、致命傷をHP1で耐える" },
 ];
 
+// === クラス成長選択 ===
+// Lv3/5/7/10で発動。idはplayer.classUpgradesのキーとして使う。
+const GROWTH_TRIGGER_LEVELS = [3, 5, 7, 10];
+const CLASS_GROWTH = {
+  "戦士": [
+    { id: "鉄壁",   desc: "防御時の被ダメージをさらに -2 (Lv毎)", maxLv: 4 },
+    { id: "反撃術", desc: "戦士カウンター率 +10% (上限+40%)",     maxLv: 4 },
+    { id: "武勇",   desc: "最大HP +10 (即時HPも回復)",            maxLv: 99 },
+  ],
+  "盗賊": [
+    { id: "罠抜け",   desc: "宝箱・罠の罠回避補正を強化",         maxLv: 99 },
+    { id: "足さばき", desc: "戦闘逃走率 +10% (上限+40%)",         maxLv: 4 },
+    { id: "目利き",   desc: "宝箱・商人で良品確率アップ",         maxLv: 99 },
+  ],
+  "魔導士": [
+    { id: "魔力増幅", desc: "魔法の巻物ダメージ +5 (上限+20)",   maxLv: 4 },
+    { id: "魔導節約", desc: "巻物消費しない確率 +10% (上限60%)", maxLv: 4 },
+    { id: "叡智",     desc: "泉良効果率・謎報酬・祈り効果アップ",maxLv: 99 },
+  ],
+};
+
 const TREASURE_POOL = [
   ["ポーション", 0.30], ["ハイポーション", 0.10],
   ["毒消し草", 0.15], ["力の薬", 0.06], ["鉄壁の薬", 0.06],
@@ -588,6 +609,10 @@ function recordRunResult(kind, score, reason) {
     maxDamage: runStats ? runStats.maxDamage       : 0,
     gold:      runStats ? runStats.totalGoldGained : 0,
     earnedShards: runStats ? (runStats.earnedShards || 0) : 0,
+    title:     runStats ? (runStats.title || "")   : "",
+    classEventSuccess: runStats ? (runStats.classEventSuccess || {warrior:0,rogue:0,mage:0}) : {warrior:0,rogue:0,mage:0},
+    growthSummary: (player.classUpgrades && Object.keys(player.classUpgrades).length > 0)
+      ? Object.entries(player.classUpgrades).map(([k,v]) => `${k} Lv${v}`).join(" / ") : "",
     hasUpgrades,
     weapon: player.weapon, armor: player.armor,
     date: Date.now(),
@@ -613,6 +638,18 @@ const ACHIEVEMENTS = [
   { id: "level_master",  name: "修練者",       desc: "Lv10に到達した" },
   { id: "riddle_master", name: "賢人の知",     desc: "謎かけに正解した" },
   { id: "first_blood",   name: "初討伐",       desc: "初めてモンスターを倒した" },
+  // === クラス別 ===
+  { id: "warrior_guardian",      name: "不屈の守護者", desc: "戦士で防御/反撃を10回以上行いB10F到達" },
+  { id: "warrior_duelist",       name: "決闘者",       desc: "決闘の間で勝利した" },
+  { id: "warrior_clear_standard",name: "戦士の証",     desc: "戦士で標準以上の難易度をクリア" },
+  { id: "rogue_lockmaster",      name: "鍵開け名人",   desc: "鍵師の小部屋で成功した" },
+  { id: "rogue_survivor",        name: "逃げ上手",     desc: "盗賊で逃走成功5回以上でB10F到達" },
+  { id: "rogue_clear_standard",  name: "影渡りの証",   desc: "盗賊で標準以上の難易度をクリア" },
+  { id: "mage_archivist",        name: "書庫の探求者", desc: "古文書の書庫で成功した" },
+  { id: "mage_scrollmaster",     name: "巻物使い",     desc: "魔導士で巻物使用＋温存合計5回以上" },
+  { id: "mage_clear_standard",   name: "大魔導士の証", desc: "魔導士で標準以上の難易度をクリア" },
+  { id: "class_growth_master",   name: "熟練の冒険者", desc: "1冒険でクラス成長を4回行った" },
+  { id: "class_event_master",    name: "三職の道",     desc: "戦士・盗賊・魔導士の専用イベント全成功" },
 ];
 function loadAchievements() { return loadJSON(ACH_KEY, {}); }
 function saveAchievements(a) { saveJSON(ACH_KEY, a); }
@@ -681,6 +718,17 @@ function newRunStats() {
     shardLog: [],          // [{reason, amount}]
     shardMarks: {},        // {5:true,10:true,15:true} 一度きり付与の管理
     amuletAvailable: false,// 旅の護符をこの冒険でまだ使えるか
+    // クラス別追加トラッカ
+    pendingGrowth: [],                // 未消化のクラス成長選択 [3,5,...]
+    classGrowthChoices: [],           // [{level, id}] 終了画面表示用
+    classEventSeen:    { warrior: 0, rogue: 0, mage: 0 },
+    classEventSuccess: { warrior: 0, rogue: 0, mage: 0 },
+    equipmentSynergyTriggers: 0,
+    title: "",
+    // 称号判定用カウンタ
+    defendingTimes: 0,
+    fleeSuccessCount: 0,
+    scrollUseCount: 0,
   };
 }
 // 旧フォーマットのrunStatsを安全に正規化する。古いキーは温存しつつ
@@ -688,11 +736,34 @@ function newRunStats() {
 function normalizeRunStats(rs) {
   const base = newRunStats();
   if (!rs || typeof rs !== "object") return base;
-  // 配列・オブジェクト型のフィールドは型を保ったままマージ
   const out = Object.assign(base, rs);
   if (!Array.isArray(out.shardLog)) out.shardLog = [];
   if (!out.shardMarks || typeof out.shardMarks !== "object") out.shardMarks = {};
+  if (!Array.isArray(out.pendingGrowth)) out.pendingGrowth = [];
+  if (!Array.isArray(out.classGrowthChoices)) out.classGrowthChoices = [];
+  if (!out.classEventSeen    || typeof out.classEventSeen    !== "object") out.classEventSeen    = { warrior: 0, rogue: 0, mage: 0 };
+  if (!out.classEventSuccess || typeof out.classEventSuccess !== "object") out.classEventSuccess = { warrior: 0, rogue: 0, mage: 0 };
+  // 旧フィールドを温存しつつ、新キーが欠けてれば0で埋める
+  ["warrior","rogue","mage"].forEach(k => {
+    if (typeof out.classEventSeen[k]    !== "number") out.classEventSeen[k]    = 0;
+    if (typeof out.classEventSuccess[k] !== "number") out.classEventSuccess[k] = 0;
+  });
+  if (typeof out.equipmentSynergyTriggers !== "number") out.equipmentSynergyTriggers = 0;
+  if (typeof out.title !== "string") out.title = "";
+  if (typeof out.defendingTimes  !== "number") out.defendingTimes  = 0;
+  if (typeof out.fleeSuccessCount!== "number") out.fleeSuccessCount = 0;
+  if (typeof out.scrollUseCount  !== "number") out.scrollUseCount  = 0;
   return out;
+}
+// player に classUpgrades を補完
+function normalizePlayer(p) {
+  if (!p || typeof p !== "object") return p;
+  if (!p.classUpgrades || typeof p.classUpgrades !== "object") p.classUpgrades = {};
+  return p;
+}
+// 現在のクラス成長Lvを返す
+function growthLv(id) {
+  return (player && player.classUpgrades && player.classUpgrades[id]) || 0;
 }
 // 1冒険分の欠片獲得をログに残しつつ runStats に積む
 function addShardsToRun(reason, amount) {
@@ -766,6 +837,7 @@ function newPlayer(name, cls) {
     inventory: [...c.start],
     weapon: null, armor: null,
     effects: [],
+    classUpgrades: {},      // {鉄壁:N, 反撃術:N, ...} 取得済みLv
   };
   for (const it of [...p.inventory]) {
     const info = ITEMS[it];
@@ -824,6 +896,11 @@ function gainExp(p, exp) {
     p.base_def += 1;
     msgs.push(`★ レベルアップ！ Lv${p.level} (HP+8 / 攻+2 / 防+1)`);
     if (p.level >= 10) unlockAch("level_master");
+    // クラス成長選択をキューに積む（メインループでawait消化）
+    if (GROWTH_TRIGGER_LEVELS.indexOf(p.level) >= 0 && runStats) {
+      runStats.pendingGrowth = runStats.pendingGrowth || [];
+      runStats.pendingGrowth.push(p.level);
+    }
   }
   return msgs;
 }
@@ -1072,14 +1149,29 @@ function useItem(p, item, inCombat = false, target = null) {
     case "magic": {
       if (!inCombat || !target) return [false, "戦闘中にしか使えない。"];
       const isMage = p.cls === "魔導士";
-      const power  = info.power + (isMage ? 10 : 0);
+      const ampLv  = isMage ? Math.min(4, growthLv("魔力増幅")) : 0;
+      // 魔導士+木の棒シナジー
+      const wandBonus = (isMage && p.weapon === "木の棒") ? 5 : 0;
+      const power = info.power + (isMage ? 10 : 0) + ampLv * 5 + wandBonus;
       target.hp  -= power;
       trackDamageDealt(power);
-      // 魔導士の20%確率「巻物温存」
-      const conserve = isMage && Math.random() < 0.20;
+      if (runStats) runStats.scrollUseCount += 1;
+      // 魔導節約：基礎20% + Lv*10%（上限60%）
+      const saveLv  = isMage ? Math.min(4, growthLv("魔導節約")) : 0;
+      const conserveRate = isMage ? Math.min(0.60, 0.20 + saveLv * 0.10) : 0;
+      const conserve = isMage && Math.random() < conserveRate;
       if (!conserve) removeOne(p.inventory, item);
       else if (runStats) runStats.mageScrollSaves += 1;
-      const tail = conserve ? "  魔導士の知恵で巻物は崩れずに残った！" : "";
+      // 巻物術師実績
+      if (isMage && runStats && (runStats.scrollUseCount + runStats.mageScrollSaves) >= 5) {
+        unlockAch("mage_scrollmaster");
+      }
+      let tail = "";
+      if (wandBonus > 0) {
+        if (runStats) runStats.equipmentSynergyTriggers += 1;
+        tail += "  木の棒を杖代わりに掲げた。";
+      }
+      if (conserve) tail += "  魔導士の知恵で巻物は崩れずに残った！";
       return [true, `魔法の巻物が炸裂！ ${target.name} に ${power} のダメージ！${tail}`];
     }
     case "level_up": {
@@ -1156,27 +1248,43 @@ async function combat(m, canFlee = true) {
       if (m.tags.includes("dragon") && player.weapon === "竜殺しの槍") {
         dmg *= 2; tell("竜殺しの槍が輝く！", "shop");
       }
-      if (player.weapon === "炎の剣" && Math.random() < 0.30) {
-        dmg += 6; tell("炎の刃が燃え上がる！", "danger");
+      // 炎の剣：魔導士装備で発動率UP
+      const fireRate = (player.cls === "魔導士") ? 0.45 : 0.30;
+      if (player.weapon === "炎の剣" && Math.random() < fireRate) {
+        dmg += 6;
+        if (player.cls === "魔導士") runStats.equipmentSynergyTriggers += 1;
+        tell("炎の刃が燃え上がる！", "danger");
       }
       if (crit) { dmg = Math.floor(dmg * 1.8); tell("会心の一撃！", "shop"); }
       m.hp -= dmg;
       trackDamageDealt(dmg);
       tell(`あなたの攻撃 → ${m.name} に ${dmg} ダメージ。`);
+      // 盗賊+木の棒：10%でひるませる
+      if (player.cls === "盗賊" && player.weapon === "木の棒" && m.hp > 0 && Math.random() < 0.10) {
+        skipEnemy = true;
+        runStats.equipmentSynergyTriggers += 1;
+        tell(`怯みの一撃！ ${m.name} は反撃できない。`, "shop");
+      }
     } else if (idx === 1) {
       defending = true;
+      runStats.defendingTimes += 1;
       tell("構えを取った。", "shop");
     } else if (idx === 2) {
       const consumed = await openInventory(true, m);
       if (consumed === null) skipEnemy = true;
-      else if (consumed === "煙玉") { tell(`${m.name} を撒いて逃げ切った！`, "shop"); saveGame(); return false; }
+      else if (consumed === "煙玉") { tell(`${m.name} を撒いて逃げ切った！`, "shop"); runStats.fleeSuccessCount += 1; saveGame(); return false; }
       else if (m.hp <= 0) break;
     } else if (idx === 3) {
       const isRogue = player.cls === "盗賊";
-      const chance = 0.4 + player.level * 0.03 + (isRogue ? 0.20 : 0);
+      // 盗賊+革の鎧：+5%
+      const armorBonus = (isRogue && player.armor === "革の鎧") ? 0.05 : 0;
+      const ashiSabaki = isRogue ? Math.min(0.40, 0.10 * growthLv("足さばき")) : 0;
+      const chance = 0.4 + player.level * 0.03 + (isRogue ? 0.20 : 0) + armorBonus + ashiSabaki;
       if (Math.random() < chance) {
         if (isRogue) tell("盗賊の脚で素早く距離を取った。", "shop");
+        if (armorBonus > 0) { runStats.equipmentSynergyTriggers += 1; tell("革の鎧が音を抑え、滑るように離脱した。", "shop"); }
         tell(`${m.name} を撒いて逃げ切った！`, "shop");
+        runStats.fleeSuccessCount += 1;
         saveGame();
         return false;
       }
@@ -1190,7 +1298,26 @@ async function combat(m, canFlee = true) {
       tell(`${m.name} の攻撃は外れた！`);
     } else {
       let edmg = calcDamage(m.atk, pDef(player));
-      if (defending) edmg = Math.max(1, Math.floor(edmg / 2));
+      if (defending) {
+        edmg = Math.max(1, Math.floor(edmg / 2));
+        // 戦士成長「鉄壁」：Lv毎 -2
+        if (player.cls === "戦士") {
+          const tessei = growthLv("鉄壁");
+          if (tessei > 0) edmg = Math.max(1, edmg - 2 * tessei);
+          // 戦士+鋼の鎧：防御時 -2 追加
+          if (player.armor === "鋼の鎧") {
+            edmg = Math.max(1, edmg - 2);
+            runStats.equipmentSynergyTriggers += 1;
+          }
+        }
+      }
+      // 戦士+聖なる鎧：ボス戦の初撃 -5
+      if (player.cls === "戦士" && player.armor === "聖なる鎧"
+          && BOSS_FLOORS.has(player.floor) && turn === 1) {
+        edmg = Math.max(1, edmg - 5);
+        runStats.equipmentSynergyTriggers += 1;
+        tell("聖なる鎧が初撃の力を吸収した。", "shop");
+      }
       applyDamage(player, edmg, m.name);
       tell(`${m.name} の攻撃 → あなたに ${edmg} ダメージ。`, "danger");
       if (m.tags.includes("poison") && !hasEffect(player, "poison") && Math.random() < 0.35) {
@@ -1199,14 +1326,22 @@ async function combat(m, canFlee = true) {
           tell("あなたは毒に侵された！", "danger");
         }
       }
-      // 戦士の反撃：防御選択中・敵が攻撃を当てた直後・30%発動
-      // 反撃ダメージは通常攻撃のおよそ50%（クリ・特効乗せず、ボスにも有効）
-      if (defending && player.cls === "戦士" && m.hp > 0 && player.hp > 0 && Math.random() < 0.30) {
-        const cdmg = Math.max(1, Math.floor(calcDamage(pAtk(player), m.defense) * 0.5));
-        m.hp -= cdmg;
-        trackDamageDealt(cdmg);
-        if (runStats) runStats.warriorCounters += 1;
-        tell(`戦士のカウンター！ ${m.name} に ${cdmg} の反撃ダメージ。`, "shop");
+      // 戦士の反撃：防御選択中・敵が攻撃を当てた直後
+      // ベース30% + 反撃術Lv*10%（最大70%）、ダメは通常攻撃の50%
+      if (defending && player.cls === "戦士" && m.hp > 0 && player.hp > 0) {
+        const cRate = 0.30 + Math.min(0.40, growthLv("反撃術") * 0.10);
+        if (Math.random() < cRate) {
+          let cdmg = Math.max(1, Math.floor(calcDamage(pAtk(player), m.defense) * 0.5));
+          // 戦士+鋼の剣：反撃ダメ +2
+          if (player.weapon === "鋼の剣") {
+            cdmg += 2;
+            runStats.equipmentSynergyTriggers += 1;
+          }
+          m.hp -= cdmg;
+          trackDamageDealt(cdmg);
+          if (runStats) runStats.warriorCounters += 1;
+          tell(`戦士のカウンター！ ${m.name} に ${cdmg} の反撃ダメージ。`, "shop");
+        }
       }
     }
     for (const msg of tickEffects(player)) tell(msg, "dim");
@@ -1257,11 +1392,14 @@ async function eventTreasure() {
   ]);
   if (idx === 2) return;
   let trapped = Math.random() < 0.20 + player.floor * 0.01;
-  // 盗賊補正：罠が仕込まれていても50%で察知して回避（実質発動率半減）
-  if (trapped && player.cls === "盗賊" && Math.random() < 0.5) {
-    trapped = false;
-    if (runStats) runStats.rogueTrapAvoids += 1;
-    tell("盗賊の勘 — 細工の匂いを察知し、針を弾き返した。", "shop");
+  // 盗賊補正：察知率は基礎50%+「罠抜け」Lv*10% (上限90%)
+  if (trapped && player.cls === "盗賊") {
+    const detectRate = Math.min(0.90, 0.50 + growthLv("罠抜け") * 0.10);
+    if (Math.random() < detectRate) {
+      trapped = false;
+      if (runStats) runStats.rogueTrapAvoids += 1;
+      tell("盗賊の勘 — 細工の匂いを察知し、針を弾き返した。", "shop");
+    }
   }
   if (idx === 1) {
     if (trapped) { tell("蹴り倒した宝箱から針が飛び出すが、当たらなかった！", "shop"); trapped = false; }
@@ -1280,6 +1418,17 @@ async function eventTreasure() {
     player.inventory.push(it);
     gained.push(it);
   }
+  // 盗賊「目利き」: Lv*15%で高品質アイテム追加（上限50%）
+  if (player.cls === "盗賊" && growthLv("目利き") > 0) {
+    const upRate = Math.min(0.50, growthLv("目利き") * 0.15);
+    if (Math.random() < upRate) {
+      const goodPool = [["ハイポーション", 0.40], ["魔法の巻物", 0.30], ["鋼の剣", 0.15], ["鎖帷子", 0.10], ["エリクサー", 0.05]];
+      const extra = weightedChoice(goodPool);
+      player.inventory.push(extra);
+      gained.push(extra);
+      tell("目利きが活きた！ 質の良い品も見つけた。", "shop");
+    }
+  }
   const gold = randInt(5, 15) * player.floor;
   addGold(player, gold);
   tell(`${gold}G と ${gained.join(", ")} を手に入れた！`, "gold");
@@ -1297,11 +1446,16 @@ async function eventTrap() {
     await openInventory(false);
     idx = await ask([{ label: "慎重に避ける" }, { label: "駆け抜ける" }]);
   }
-  const sr = Math.min(0.85, 0.45 + pDef(player) * 0.02);
+  // 盗賊「罠抜け」：基礎成功率に+5%/Lv（上限90%）
+  let sr = Math.min(0.85, 0.45 + pDef(player) * 0.02);
+  if (player.cls === "盗賊" && growthLv("罠抜け") > 0) {
+    sr = Math.min(0.95, sr + growthLv("罠抜け") * 0.05);
+  }
   let actual;
   if (idx === 0) {
     if (Math.random() < sr) {
       tell(`${t.desc} だがあなたは見切って避けた！`, "shop");
+      if (player.cls === "盗賊" && growthLv("罠抜け") > 0) tell("罠抜けの呼吸が活きた。", "shop");
       gainExp(player, 3); renderStatus();
       return;
     }
@@ -1312,6 +1466,11 @@ async function eventTrap() {
     actual = Math.floor(t.dmg / 2);
   }
   if (t.kind === "phys") {
+    // 盗賊+鎖帷子：物理罠ダメ -2
+    if (player.cls === "盗賊" && player.armor === "鎖帷子") {
+      actual = Math.max(1, actual - 2);
+      runStats.equipmentSynergyTriggers += 1;
+    }
     applyDamage(player, actual, t.name);
     tell(`${actual} のダメージ。`, "danger");
   } else if (t.kind === "poison") {
@@ -1354,6 +1513,12 @@ async function eventMerchant() {
   let pool = ["ポーション", "ハイポーション", "毒消し草", "力の薬", "煙玉", "魔法の巻物", "鉄の剣", "鋼の剣", "革の鎧", "鎖帷子"];
   if (player.floor >= 8)  pool = pool.concat(["炎の剣", "鋼の鎧", "エリクサー"]);
   if (player.floor >= 14) pool = pool.concat(["竜殺しの槍", "聖なる鎧"]);
+  // 盗賊「目利き」: Lv毎に高品質アイテム枠を増やす
+  if (player.cls === "盗賊" && growthLv("目利き") > 0) {
+    const goods = ["ハイポーション","エリクサー","魔法の巻物","鎖帷子"];
+    for (let i = 0; i < growthLv("目利き"); i++) pool = pool.concat(goods);
+    tell("「目利きの客には、いい物を用意してある」", "shop");
+  }
   const stock = Array.from({ length: 5 }, () => choice(pool));
 
   while (true) {
@@ -1409,6 +1574,14 @@ async function eventShrine() {
     player.hp = player.max_hp;
     player.effects = [];
     tell("温かい光に包まれ、心身ともに癒された。", "heal");
+    // 魔導士「叡智」: Lv*15%で最大HP+3
+    if (player.cls === "魔導士" && growthLv("叡智") > 0) {
+      const c = Math.min(0.60, growthLv("叡智") * 0.15);
+      if (Math.random() < c) {
+        player.max_hp += 3; player.hp = player.max_hp;
+        tell("叡智の祈りが届き、最大HPが3上昇した。", "heal");
+      }
+    }
   } else if (idx === 1) {
     const cost = Math.max(20, Math.floor(player.gold / 10));
     if (player.gold < cost) { tell("捧げ物が足りなかった…", "dim"); return; }
@@ -1444,23 +1617,42 @@ async function eventFountain() {
     return;
   }
   // 魔導士補正：良効果ゾーン(0..0.75)を 0..0.85 に拡張、悪効果ゾーンは縮小
+  // さらに「叡智」Lv毎に良効果範囲を +0.02
   const isMage = player.cls === "魔導士";
+  const eichi  = isMage ? growthLv("叡智") : 0;
   if (isMage) tell("魔導士の素養が泉の力を引き寄せる…", "shop");
-  const t1 = isMage ? 0.34 : 0.30;
-  const t2 = isMage ? 0.62 : 0.55;
-  const t3 = isMage ? 0.85 : 0.75;
-  const t4 = isMage ? 0.93 : 0.90;
+  const shift = eichi * 0.02;
+  const t1 = (isMage ? 0.34 : 0.30) + shift;
+  const t2 = (isMage ? 0.62 : 0.55) + shift;
+  const t3 = (isMage ? 0.85 : 0.75) + shift;
+  const t4 = (isMage ? 0.93 : 0.90) + shift;
   const r = Math.random();
   if (r < t1) { player.max_hp += 10; player.hp = player.max_hp; tell("最大HPが10上昇した！", "heal"); }
   else if (r < t2) { player.base_atk += 2; tell("攻撃力が永続的に2上昇した！", "heal"); }
   else if (r < t3) { player.base_def += 2; tell("防御力が永続的に2上昇した！", "heal"); }
   else if (r < t4) {
-    const l = randInt(5, 15);
+    let l = randInt(5, 15);
+    // 魔導士+聖なる鎧：泉の悪効果ダメ -50%
+    if (isMage && player.armor === "聖なる鎧") {
+      l = Math.max(1, Math.floor(l / 2));
+      runStats.equipmentSynergyTriggers += 1;
+      tell("聖なる鎧が泉の悪意を吸収した。", "shop");
+    }
     player.hp = Math.max(1, player.hp - l);
     setLastDamage("腐った水");
     tell(`水は腐っていた！ ${l} のダメージ。`, "danger");
   }
-  else { player.max_hp = Math.max(10, player.max_hp - 5); player.hp = Math.min(player.hp, player.max_hp); tell("最大HPが5下がった…", "danger"); }
+  else {
+    let down = 5;
+    if (isMage && player.armor === "聖なる鎧") {
+      down = 3;
+      runStats.equipmentSynergyTriggers += 1;
+      tell("聖なる鎧が呪詛を弱めた。", "shop");
+    }
+    player.max_hp = Math.max(10, player.max_hp - down);
+    player.hp = Math.min(player.hp, player.max_hp);
+    tell(`最大HPが${down}下がった…`, "danger");
+  }
 }
 
 const RIDDLES = [
@@ -1475,10 +1667,14 @@ async function eventRiddle() {
   tellEvent("謎かけ", `スフィンクスが立ち塞がる。\n「謎を解けば富を授け、間違えば命を頂く。」\n\n${r.q}`, "shop");
   const ans = (await askText("答え")).trim();
   if (ans === r.a) {
-    const g = 50 * player.floor;
+    // 魔導士「叡智」: 報酬+10%/Lv（上限+50%）
+    const eichi = (player.cls === "魔導士") ? Math.min(5, growthLv("叡智")) : 0;
+    const mult  = 1 + eichi * 0.10;
+    const g = Math.floor(50 * player.floor * mult);
     addGold(player, g);
-    const msgs = gainExp(player, 20);
-    tell(`正解！ ${g}G と深い経験を得た。 ` + msgs.join(" "), "gold");
+    const expGain = Math.floor(20 * mult);
+    const msgs = gainExp(player, expGain);
+    tell(`正解！ ${g}G と経験値+${expGain} を得た。${eichi ? " (叡智の加護)" : ""} ` + msgs.join(" "), "gold");
     unlockAch("riddle_master");
   } else {
     tell(`不正解！ 答えは「${r.a}」だった。スフィンクスが襲いかかる！`, "danger");
@@ -1541,6 +1737,207 @@ function checkFloorAchievements() {
   if (f >= 5)  unlockAch("explorer");
   if (f >= 10) unlockAch("venturer");
   if (f >= 15) unlockAch("hero_candidate");
+  // クラス別到達実績
+  if (f >= 10 && player.cls === "戦士" &&
+      (runStats.defendingTimes + runStats.warriorCounters) >= 10) {
+    unlockAch("warrior_guardian");
+  }
+  if (f >= 10 && player.cls === "盗賊" && runStats.fleeSuccessCount >= 5) {
+    unlockAch("rogue_survivor");
+  }
+}
+
+// ====================================================================
+// クラス成長選択
+// ====================================================================
+async function offerGrowthChoice(level) {
+  const list = CLASS_GROWTH[player.cls];
+  if (!list) return;
+  // 上限到達済みは選択肢から除外する（残ってる項目だけ提示）
+  const candidates = list.filter(g => (player.classUpgrades[g.id] || 0) < g.maxLv);
+  if (candidates.length === 0) return;
+  tellEvent(`✦ クラス成長 (Lv${level})`, `${player.cls}としての歩みが深まる。1つ選べ。`, "shop");
+  const opts = candidates.map(g => {
+    const cur = player.classUpgrades[g.id] || 0;
+    const maxTag = (g.maxLv === 99) ? "" : ` (現Lv${cur}/${g.maxLv})`;
+    return { label: `${g.id}${maxTag}`, desc: g.desc };
+  });
+  const idx = await ask(opts);
+  const chosen = candidates[idx];
+  player.classUpgrades[chosen.id] = (player.classUpgrades[chosen.id] || 0) + 1;
+  // 武勇は即時HP/最大HP+10
+  if (chosen.id === "武勇") {
+    player.max_hp += 10;
+    player.hp += 10;
+  }
+  runStats.classGrowthChoices.push({ level, id: chosen.id });
+  tell(`✦ ${chosen.id} を習得！ (現Lv${player.classUpgrades[chosen.id]})`, "heal");
+  // 4回成長で実績
+  if (runStats.classGrowthChoices.length >= 4) unlockAch("class_growth_master");
+  saveGame();
+  renderStatus();
+}
+async function processGrowthQueue() {
+  if (!runStats || !runStats.pendingGrowth) return;
+  while (runStats.pendingGrowth.length > 0 && player.hp > 0) {
+    const lvl = runStats.pendingGrowth.shift();
+    await offerGrowthChoice(lvl);
+  }
+}
+
+// ====================================================================
+// 称号判定
+// ====================================================================
+function determineTitle() {
+  if (!runStats || !player) return "";
+  const cls = player.cls;
+  const cs = runStats;
+  if (cls === "戦士") {
+    if (cs.warriorCounters >= 8) return "反撃の戦士";
+    if (cs.defendingTimes  >= 12) return "鉄壁の戦士";
+    if (cs.classEventSuccess.warrior >= 1) return "決闘の戦士";
+  } else if (cls === "盗賊") {
+    if (cs.fleeSuccessCount >= 8) return "影渡り";
+    if ((cs.classEventSuccess.rogue + cs.rogueTrapAvoids) >= 6) return "宝探し";
+    if (cs.classEventSuccess.rogue >= 1) return "鍵師";
+  } else if (cls === "魔導士") {
+    if (cs.scrollUseCount >= 6) return "巻物術師";
+    if ((cs.classEventSuccess.mage) >= 1) return "賢者";
+    if (cs.mageScrollSaves >= 4) return "節約の魔導士";
+  }
+  return "";
+}
+
+// ====================================================================
+// クラス専用イベント
+// ====================================================================
+async function eventDuel() {
+  runStats.classEventSeen.warrior += 1;
+  tellEvent("⚔ 決闘の間", "古びた闘技場のような部屋。中央で1体の敵が剣を構えている。", "combat");
+  const idx = await ask([
+    { label: "決闘を受ける",         desc: "正面から戦う・勝利時ボーナス" },
+    { label: "守りを固めて挑む",     desc: "1ターン防御+4 で開始" },
+    { label: "立ち去る" },
+  ]);
+  if (idx === 2) return;
+  const pool = FLOOR_POOL[floorTier(player.floor)];
+  const m = makeMonster(choice(pool));
+  // 少し強化してネームドにする
+  m.hp  = Math.max(1, Math.floor(m.hp  * 1.15));
+  m.atk = Math.max(1, Math.floor(m.atk * 1.05));
+  m.name = `決闘者の${m.name}`;
+  if (idx === 1) {
+    addEffect(player, "buff_def", 2, 4);
+    tell("守りを固めた。1ターン防御+4。", "shop");
+  }
+  if (growthLv("反撃術") > 0 || growthLv("鉄壁") > 0) {
+    tell("鍛えた構えが闘技場の空気を一変させた。", "shop");
+  }
+  const won = await combat(m, false);
+  if (won) {
+    runStats.classEventSuccess.warrior += 1;
+    const g = 30 + player.floor * 5;
+    addGold(player, g);
+    const msgs = gainExp(player, 12);
+    tell(`勝利の褒賞 ${g}G と経験値+12！ ` + msgs.join(" "), "victory");
+    unlockAch("warrior_duelist");
+    checkClassEventMaster();
+  }
+}
+
+async function eventLocksmith() {
+  runStats.classEventSeen.rogue += 1;
+  tellEvent("🗝 鍵師の小部屋", "鍵のかかった宝箱、隠し棚、古い金庫が並んでいる。", "shop");
+  const idx = await ask([
+    { label: "鍵開けに挑む", desc: "成功時に良質な報酬／失敗時にダメージ" },
+    { label: "罠だけ外す",   desc: "中報酬・低リスク" },
+    { label: "立ち去る" },
+  ]);
+  if (idx === 2) return;
+  if (idx === 0) {
+    let succ = 0.50 + growthLv("罠抜け") * 0.07 + growthLv("目利き") * 0.05;
+    succ = Math.min(0.92, succ);
+    if (Math.random() < succ) {
+      runStats.classEventSuccess.rogue += 1;
+      const items = ["ハイポーション", "魔法の巻物", "鋼の剣", "鎖帷子", "エリクサー"];
+      const item = choice(items);
+      player.inventory.push(item);
+      const g = randInt(40, 80) + player.floor * 10;
+      addGold(player, g);
+      tell(`鍵が開いた！ ${item} と ${g}G を入手！`, "gold");
+      unlockAch("rogue_lockmaster");
+      checkClassEventMaster();
+    } else {
+      const dmg = randInt(8, 15);
+      applyDamage(player, dmg, "鍵師の罠");
+      tell(`鍵を間違えた！ 鋭い針が出て ${dmg} のダメージ。`, "danger");
+    }
+  } else {
+    const succ = Math.min(0.95, 0.7 + growthLv("罠抜け") * 0.08);
+    if (Math.random() < succ) {
+      runStats.classEventSuccess.rogue += 1;
+      const item = weightedChoice([["ポーション",0.5],["毒消し草",0.3],["煙玉",0.2]]);
+      player.inventory.push(item);
+      const g = randInt(15, 30) + player.floor * 3;
+      addGold(player, g);
+      tell(`罠を外した。${item} と ${g}G を回収。`, "shop");
+    } else {
+      const dmg = randInt(3, 6);
+      applyDamage(player, dmg, "古い罠");
+      tell(`罠の解除に失敗。${dmg} のダメージ。`, "danger");
+    }
+  }
+}
+
+async function eventLibrary() {
+  runStats.classEventSeen.mage += 1;
+  tellEvent("📜 古文書の書庫", "魔術書や古文書がぎっしり並ぶ書庫を見つけた。", "shop");
+  const idx = await ask([
+    { label: "魔術書を読む", desc: "巻物獲得チャンス／リスク有" },
+    { label: "古文書を解読", desc: "経験値・報酬／低リスク" },
+    { label: "立ち去る" },
+  ]);
+  if (idx === 2) return;
+  if (idx === 0) {
+    const r = Math.random();
+    const goodLine = 0.55 + growthLv("叡智") * 0.05 + growthLv("魔導節約") * 0.03;
+    if (r < goodLine) {
+      runStats.classEventSuccess.mage += 1;
+      const n = 1 + (Math.random() < 0.30 ? 1 : 0);
+      for (let i = 0; i < n; i++) player.inventory.push("魔法の巻物");
+      tell(`魔術書から知識を得て、魔法の巻物 ×${n} を作り出した！`, "gold");
+      unlockAch("mage_archivist");
+      checkClassEventMaster();
+    } else if (r < 0.88) {
+      tell("魔術書の文字は普通の古い記述にすぎなかった。", "dim");
+    } else {
+      addEffect(player, "poison", 4);
+      setLastDamage("禁書の呪い");
+      tell("読んではいけない呪文を口にしてしまった！毒に侵された。", "danger");
+    }
+  } else {
+    const reward = 25 + growthLv("叡智") * 10;
+    const msgs = gainExp(player, reward);
+    runStats.classEventSuccess.mage += 1;
+    tell(`古文書を解読した！ 経験値 +${reward}。 ` + msgs.join(" "), "shop");
+    if (growthLv("叡智") > 0) {
+      const g = 20 + player.floor * 5;
+      addGold(player, g);
+      tell(`叡智により ${g}G の追加報酬！`, "gold");
+    }
+    unlockAch("mage_archivist");
+    checkClassEventMaster();
+  }
+}
+
+const CLASS_EVENT_MAP = {
+  "戦士":   eventDuel,
+  "盗賊":   eventLocksmith,
+  "魔導士": eventLibrary,
+};
+function checkClassEventMaster() {
+  const a = loadAchievements();
+  if (a.warrior_duelist && a.rogue_lockmaster && a.mage_archivist) unlockAch("class_event_master");
 }
 
 // ====================================================================
@@ -1663,6 +2060,7 @@ async function resumeGame() {
   }
   try {
     player   = data.player;
+    normalizePlayer(player);
     runStats = normalizeRunStats(data.runStats);
     if (typeof player.hp !== "number" || player.hp <= 0) throw new Error("invalid save");
     // 旧セーブ互換：difficultyが無い／未知の値ならchallenge扱い（既存プレイ感維持）
@@ -1721,12 +2119,23 @@ async function showRecords() {
     const tag = lr.kind === "win" ? "🎉 勝利" : "☠ 敗北";
     const dl  = (lr.difficulty && DIFFICULTIES[lr.difficulty]) ? DIFFICULTIES[lr.difficulty].label : "—";
     const upTag = lr.hasUpgrades ? " ✦ 強化あり" : "";
+    const titleRow = lr.title ? `<tr><td>称号</td><td>${escapeHtml(lr.title)}</td></tr>` : "";
+    const growthRow = lr.growthSummary ? `<tr><td>成長</td><td>${escapeHtml(lr.growthSummary)}</td></tr>` : "";
+    const ces = lr.classEventSuccess || {};
+    const ceParts = [];
+    if (ces.warrior) ceParts.push(`決闘${ces.warrior}`);
+    if (ces.rogue)   ceParts.push(`鍵${ces.rogue}`);
+    if (ces.mage)    ceParts.push(`書庫${ces.mage}`);
+    const ceRow = ceParts.length ? `<tr><td>クラスイベント</td><td>${ceParts.join(" / ")}</td></tr>` : "";
     html += `<h3>最終冒険</h3>
       <table>
         <tr><td>結果</td><td>${tag}（${dl}${upTag}）</td></tr>
         <tr><td>勇者</td><td>${escapeHtml(lr.name)} (${lr.cls})</td></tr>
         <tr><td>到達階 / Lv</td><td>B${lr.floor}F / Lv${lr.level}</td></tr>
         <tr><td>撃破 / 最大ダメ</td><td>${lr.kills}体 / ${lr.maxDamage}</td></tr>
+        ${titleRow}
+        ${growthRow}
+        ${ceRow}
         <tr><td>獲得欠片</td><td>${lr.earnedShards || 0} 個</td></tr>
         <tr><td>${lr.kind === "win" ? "勝因" : "死因"}</td><td>${escapeHtml(lr.reason || "—")}</td></tr>
         <tr><td>スコア</td><td class="score">${lr.score}</td></tr>
@@ -1836,10 +2245,38 @@ function buildEndCard(kind, reason) {
   // クラス特技の発動回数（0件なら非表示）
   const skills = [];
   if (runStats.warriorCounters)  skills.push(["戦士の反撃",     `${runStats.warriorCounters} 回`]);
+  if (runStats.defendingTimes)   skills.push(["防御",            `${runStats.defendingTimes} 回`]);
   if (runStats.rogueTrapAvoids)  skills.push(["盗賊の罠回避",   `${runStats.rogueTrapAvoids} 回`]);
-  if (runStats.mageScrollSaves)  skills.push(["魔導士の巻物温存", `${runStats.mageScrollSaves} 回`]);
+  if (runStats.fleeSuccessCount) skills.push(["逃走成功",        `${runStats.fleeSuccessCount} 回`]);
+  if (runStats.mageScrollSaves)  skills.push(["魔導士の巻物温存",`${runStats.mageScrollSaves} 回`]);
+  if (runStats.scrollUseCount)   skills.push(["巻物使用",        `${runStats.scrollUseCount} 回`]);
+  if (runStats.equipmentSynergyTriggers) skills.push(["装備シナジー", `${runStats.equipmentSynergyTriggers} 回`]);
   const skillsBlock = skills.length
     ? `<h3>クラス特技</h3><table>${skills.map(([k,v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("")}</table>`
+    : "";
+
+  // クラス成長一覧
+  let growthBlock = "";
+  if (player.classUpgrades && Object.keys(player.classUpgrades).length > 0) {
+    const items = Object.entries(player.classUpgrades).map(([k,v]) => `${k} Lv${v}`).join(" / ");
+    growthBlock = `<h3>クラス成長</h3><table><tr><td>${escapeHtml(items)}</td></tr></table>`;
+  }
+  // クラス専用イベント
+  let classEventBlock = "";
+  const ces = runStats.classEventSuccess || {};
+  const total = (ces.warrior||0) + (ces.rogue||0) + (ces.mage||0);
+  if (total > 0) {
+    const lines = [];
+    if (ces.warrior) lines.push(`決闘の間: ${ces.warrior} 勝`);
+    if (ces.rogue)   lines.push(`鍵師の小部屋: ${ces.rogue} 成功`);
+    if (ces.mage)    lines.push(`古文書の書庫: ${ces.mage} 成功`);
+    classEventBlock = `<h3>クラス専用イベント</h3><table>${lines.map(l => `<tr><td>${escapeHtml(l)}</td></tr>`).join("")}</table>`;
+  }
+  // 称号
+  const title = determineTitle();
+  if (runStats) runStats.title = title;
+  const titleBlock = title
+    ? `<div class="badge-list" style="margin-top:8px;"><span class="badge" style="font-size:13px;">称号: ${escapeHtml(title)}</span></div>`
     : "";
 
   // 難易度・強化フラグ
@@ -1875,7 +2312,10 @@ function buildEndCard(kind, reason) {
       <tr><td>累計獲得G</td><td>${runStats.totalGoldGained}G</td></tr>
       <tr><td>総合スコア</td><td class="score">${score}</td></tr>
     </table>
+    ${growthBlock}
     ${skillsBlock}
+    ${classEventBlock}
+    ${titleBlock}
     ${shardBlock}
     ${badges}
     <p style="margin-top:14px; font-style:italic; color:var(--dim);">${tagline}</p>
@@ -1901,6 +2341,10 @@ async function ending() {
   captureNewAchievements(() => {
     unlockAch("savior");
     unlockAch({ "戦士": "warrior_clear", "盗賊": "rogue_clear", "魔導士": "mage_clear" }[player.cls]);
+    // 標準以上のクリア限定実績
+    if (player.difficulty === "normal" || player.difficulty === "challenge") {
+      unlockAch({ "戦士": "warrior_clear_standard", "盗賊": "rogue_clear_standard", "魔導士": "mage_clear_standard" }[player.cls]);
+    }
     const a = loadAchievements();
     if (a.warrior_clear && a.rogue_clear && a.mage_clear) unlockAch("all_classes");
   });
@@ -1964,10 +2408,18 @@ async function gameLoop() {
       if (BOSS_FLOORS.has(player.floor)) {
         await eventBoss();
       } else {
-        await pickEvent()();
+        // 7%でクラス専用イベント、それ以外は通常イベント
+        const classFn = CLASS_EVENT_MAP[player.cls];
+        if (classFn && Math.random() < 0.07) {
+          await classFn();
+        } else {
+          await pickEvent()();
+        }
       }
       // イベント解決直後セーブ：HP/所持金/アイテム/EXP/装備の最新を反映
       if (player.hp > 0) saveGame();
+      // クラス成長キューを消化（イベント中にレベルアップした分）
+      if (player.hp > 0) await processGrowthQueue();
       if (player.hp > 0 && player.effects.length > 0) {
         for (const msg of tickEffects(player)) tell(msg, "dim");
         renderStatus();
