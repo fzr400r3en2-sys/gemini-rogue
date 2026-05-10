@@ -414,6 +414,22 @@ const CLASSES = {
   "魔導士": { hp: 24, atk:  8, defense: 3, gold: 50, start: ["木の棒", "魔法の巻物", "魔法の巻物"], desc: "巻物で固定30ダメ" },
 };
 
+// === 難易度 ===
+const DIFFICULTIES = {
+  story:     { label: "物語", enemyHP: 0.85, enemyAtk: 0.80, floorHeal: 0.15, scoreMul: 0.80, desc: "まずはクリアを目指したい人向け" },
+  normal:    { label: "標準", enemyHP: 0.95, enemyAtk: 0.90, floorHeal: 0.10, scoreMul: 1.00, desc: "おすすめ難易度" },
+  challenge: { label: "挑戦", enemyHP: 1.00, enemyAtk: 1.00, floorHeal: 0.00, scoreMul: 1.25, desc: "現在相当の緊張感ある難易度" },
+};
+const DEFAULT_DIFFICULTY = "challenge"; // 旧セーブ互換用
+
+// === 記憶の強化（メタプログレッション） ===
+const UPGRADES = [
+  { id: "potion",  name: "旅支度",   maxLv: 3, costs: [2, 4, 6], desc: "Lvごとに初期ポーション +1" },
+  { id: "vitality",name: "体力修練", maxLv: 3, costs: [3, 6, 9], desc: "Lvごとに最大HP +5" },
+  { id: "purse",   name: "小銭袋",   maxLv: 3, costs: [2, 4, 6], desc: "Lvごとに初期所持金 +20G" },
+  { id: "amulet",  name: "旅の護符", maxLv: 1, costs: [10],      desc: "1冒険1回、致命傷をHP1で耐える" },
+];
+
 const TREASURE_POOL = [
   ["ポーション", 0.30], ["ハイポーション", 0.10],
   ["毒消し草", 0.15], ["力の薬", 0.06], ["鉄壁の薬", 0.06],
@@ -445,6 +461,7 @@ const SAVE_VERSION = 1;
 const SAVE_KEY    = `gemini-rogue:save:v${SAVE_VERSION}`;
 const RECORDS_KEY = `gemini-rogue:records:v${SAVE_VERSION}`;
 const ACH_KEY     = `gemini-rogue:achievements:v${SAVE_VERSION}`;
+const META_KEY    = `gemini-rogue:meta:v${SAVE_VERSION}`;
 
 function lsAvailable() {
   try {
@@ -507,27 +524,40 @@ const DEFAULT_RECORDS = {
   highestScore: 0,
   clears: 0,
   deaths: 0,
-  classBest: { "戦士": 0, "盗賊": 0, "魔導士": 0 },
+  classBest:   { "戦士": 0, "盗賊": 0, "魔導士": 0 },
   classClears: { "戦士": 0, "盗賊": 0, "魔導士": 0 },
+  byDiff: {
+    story:     { highestFloor: 0, highestScore: 0, clears: 0, deaths: 0 },
+    normal:    { highestFloor: 0, highestScore: 0, clears: 0, deaths: 0 },
+    challenge: { highestFloor: 0, highestScore: 0, clears: 0, deaths: 0 },
+  },
   lastResult: null,
 };
 function loadRecords() {
   const r = loadJSON(RECORDS_KEY, null);
   const def = JSON.parse(JSON.stringify(DEFAULT_RECORDS));
   if (!r || typeof r !== "object") return def;
-  return {
+  const merged = {
     ...def,
     ...r,
     classBest:   { ...def.classBest,   ...(r.classBest   || {}) },
     classClears: { ...def.classClears, ...(r.classClears || {}) },
+    byDiff: {
+      story:     { ...def.byDiff.story,     ...((r.byDiff && r.byDiff.story)     || {}) },
+      normal:    { ...def.byDiff.normal,    ...((r.byDiff && r.byDiff.normal)    || {}) },
+      challenge: { ...def.byDiff.challenge, ...((r.byDiff && r.byDiff.challenge) || {}) },
+    },
   };
+  return merged;
 }
 function saveRecords(r) { saveJSON(RECORDS_KEY, r); }
 
 function recordRunResult(kind, score, reason) {
   const r = loadRecords();
-  const fl = (player && player.floor) || 1;
-  const cls = (player && player.cls) || "戦士";
+  const fl  = (player && player.floor) || 1;
+  const cls = (player && player.cls)   || "戦士";
+  const diff = (player && player.difficulty && DIFFICULTIES[player.difficulty]) ? player.difficulty : DEFAULT_DIFFICULTY;
+
   if (fl > r.highestFloor) r.highestFloor = fl;
   if (score > r.highestScore) r.highestScore = score;
   if (fl > (r.classBest[cls] || 0)) r.classBest[cls] = fl;
@@ -537,13 +567,28 @@ function recordRunResult(kind, score, reason) {
   } else {
     r.deaths += 1;
   }
+
+  // 難易度別記録
+  const bd = r.byDiff[diff];
+  if (bd) {
+    if (fl > bd.highestFloor) bd.highestFloor = fl;
+    if (score > bd.highestScore) bd.highestScore = score;
+    if (kind === "win") bd.clears += 1; else bd.deaths += 1;
+  }
+
+  // 強化フラグ
+  const meta = loadMeta();
+  const hasUpgrades = Object.values(meta.upgrades).some(v => v > 0);
+
   r.lastResult = {
     kind, reason: reason || "",
-    name: player.name, cls,
+    name: player.name, cls, difficulty: diff,
     floor: fl, level: player.level, score,
-    kills:     runStats ? runStats.kills        : 0,
-    maxDamage: runStats ? runStats.maxDamage    : 0,
+    kills:     runStats ? runStats.kills           : 0,
+    maxDamage: runStats ? runStats.maxDamage       : 0,
     gold:      runStats ? runStats.totalGoldGained : 0,
+    earnedShards: runStats ? (runStats.earnedShards || 0) : 0,
+    hasUpgrades,
     weapon: player.weapon, armor: player.armor,
     date: Date.now(),
   };
@@ -581,7 +626,34 @@ function unlockAch(id) {
   a[id] = { unlockedAt: Date.now() };
   saveAchievements(a);
   showAchievementToast(def);
+  // 初回解除でこの冒険の欠片+1
+  addShardsToRun(`実績「${def.name}」初解除`, 1);
   return true;
+}
+
+// ---- メタプログレッション（記憶の欠片＆強化）----
+const DEFAULT_META = {
+  shards: 0,
+  totalShards: 0,
+  upgrades: { potion: 0, vitality: 0, purse: 0, amulet: 0 },
+};
+function loadMeta() {
+  const m = loadJSON(META_KEY, null);
+  const def = JSON.parse(JSON.stringify(DEFAULT_META));
+  if (!m || typeof m !== "object") return def;
+  return {
+    ...def,
+    ...m,
+    upgrades: { ...def.upgrades, ...(m.upgrades || {}) },
+  };
+}
+function saveMeta(m) { saveJSON(META_KEY, m); }
+function addShards(amount) {
+  if (amount <= 0) return;
+  const m = loadMeta();
+  m.shards += amount;
+  m.totalShards += amount;
+  saveMeta(m);
 }
 
 // ---- 一括削除 ----
@@ -589,6 +661,10 @@ function wipeAllStorage() {
   removeKey(SAVE_KEY);
   removeKey(RECORDS_KEY);
   removeKey(ACH_KEY);
+  removeKey(META_KEY);
+}
+function wipeSaveOnly() {
+  removeKey(SAVE_KEY);
 }
 
 // ---- ランタイム統計 ----
@@ -600,6 +676,11 @@ function newRunStats() {
     warriorCounters: 0,
     rogueTrapAvoids: 0,
     mageScrollSaves: 0,
+    // メタプログレッション関連（今回の冒険で稼いだ欠片）
+    earnedShards: 0,
+    shardLog: [],          // [{reason, amount}]
+    shardMarks: {},        // {5:true,10:true,15:true} 一度きり付与の管理
+    amuletAvailable: false,// 旅の護符をこの冒険でまだ使えるか
   };
 }
 // 旧フォーマットのrunStatsを安全に正規化する。古いキーは温存しつつ
@@ -607,7 +688,18 @@ function newRunStats() {
 function normalizeRunStats(rs) {
   const base = newRunStats();
   if (!rs || typeof rs !== "object") return base;
-  return Object.assign(base, rs);
+  // 配列・オブジェクト型のフィールドは型を保ったままマージ
+  const out = Object.assign(base, rs);
+  if (!Array.isArray(out.shardLog)) out.shardLog = [];
+  if (!out.shardMarks || typeof out.shardMarks !== "object") out.shardMarks = {};
+  return out;
+}
+// 1冒険分の欠片獲得をログに残しつつ runStats に積む
+function addShardsToRun(reason, amount) {
+  if (!runStats || amount <= 0) return;
+  runStats.earnedShards = (runStats.earnedShards || 0) + amount;
+  runStats.shardLog = runStats.shardLog || [];
+  runStats.shardLog.push({ reason, amount });
 }
 function setLastDamage(src) { if (runStats && src) runStats.lastDamageSource = src; }
 function trackKill() {
@@ -647,7 +739,18 @@ function floorTier(f) {
   return 5;
 }
 function bossFor(f) { return ({ 5: "スライム王", 10: "ゴブリン将軍", 15: "古龍", 20: "魔王ザロス" })[f]; }
-function makeMonster(name) { return JSON.parse(JSON.stringify(MONSTERS[name])); }
+function currentDifficulty() {
+  const d = (player && player.difficulty) || DEFAULT_DIFFICULTY;
+  return DIFFICULTIES[d] ? d : DEFAULT_DIFFICULTY;
+}
+function diffCfg() { return DIFFICULTIES[currentDifficulty()]; }
+function makeMonster(name) {
+  const m = JSON.parse(JSON.stringify(MONSTERS[name]));
+  const d = diffCfg();
+  m.hp  = Math.max(1, Math.floor(m.hp  * d.enemyHP));
+  m.atk = Math.max(1, Math.floor(m.atk * d.enemyAtk));
+  return m;
+}
 
 // ====================================================================
 // プレイヤー
@@ -696,8 +799,7 @@ function tickEffects(p) {
   for (const e of p.effects) {
     if (e.name === "poison") {
       if (p.armor === "聖なる鎧") { msgs.push("聖なる鎧が毒を浄化した。"); continue; }
-      p.hp -= 2;
-      setLastDamage("毒");
+      applyDamage(p, 2, "毒");
       msgs.push("毒で2のダメージ。");
     }
     e.turns -= 1;
@@ -734,6 +836,38 @@ function addGold(p, g) {
   if (g <= 0) return;
   p.gold += g;
   trackGoldGain(g);
+}
+
+// ---- ダメージ適用（旅の護符チェックを集約） ----
+// すべての player 側ダメージを必ずこの関数経由にすることで、
+// 1冒険1回の致命傷耐えロジックを副作用なく差し込める。
+function applyDamage(p, amount, source) {
+  if (amount <= 0) return 0;
+  if (source) setLastDamage(source);
+  // 旅の護符：致命傷を1回だけHP1で耐える
+  if (p === player && runStats && runStats.amuletAvailable && (p.hp - amount) <= 0) {
+    p.hp = 1;
+    runStats.amuletAvailable = false;
+    tell("✦ 旅の護符が砕け散った！ HP1で踏みとどまった。", "heal");
+    return amount;
+  }
+  p.hp = Math.max(0, p.hp - amount);
+  return amount;
+}
+
+// ---- 強化適用（新規開始時に1度だけ呼ぶ） ----
+function applyUpgrades(p) {
+  const meta = loadMeta();
+  const u = meta.upgrades;
+  // 旅支度
+  for (let i = 0; i < (u.potion || 0); i++) p.inventory.push("ポーション");
+  // 体力修練
+  const hpb = (u.vitality || 0) * 5;
+  if (hpb > 0) { p.max_hp += hpb; p.hp += hpb; }
+  // 小銭袋
+  if ((u.purse || 0) > 0) p.gold += (u.purse || 0) * 20;
+  // 旅の護符はrunStatsで管理
+  if (runStats) runStats.amuletAvailable = (u.amulet || 0) > 0;
 }
 
 // ---- クラス補正ヘルパ ----
@@ -1057,8 +1191,7 @@ async function combat(m, canFlee = true) {
     } else {
       let edmg = calcDamage(m.atk, pDef(player));
       if (defending) edmg = Math.max(1, Math.floor(edmg / 2));
-      player.hp -= edmg;
-      setLastDamage(m.name);
+      applyDamage(player, edmg, m.name);
       tell(`${m.name} の攻撃 → あなたに ${edmg} ダメージ。`, "danger");
       if (m.tags.includes("poison") && !hasEffect(player, "poison") && Math.random() < 0.35) {
         if (player.armor !== "聖なる鎧") {
@@ -1136,8 +1269,7 @@ async function eventTreasure() {
   }
   if (trapped) {
     const dmg = randInt(5, 12);
-    player.hp -= dmg;
-    setLastDamage("宝箱の罠");
+    applyDamage(player, dmg, "宝箱の罠");
     tell(`宝箱は罠だった！ ${dmg} のダメージ。`, "danger");
     if (player.hp <= 0) return;
   }
@@ -1180,8 +1312,7 @@ async function eventTrap() {
     actual = Math.floor(t.dmg / 2);
   }
   if (t.kind === "phys") {
-    player.hp -= actual;
-    setLastDamage(t.name);
+    applyDamage(player, actual, t.name);
     tell(`${actual} のダメージ。`, "danger");
   } else if (t.kind === "poison") {
     if (player.armor === "聖なる鎧") tell("聖なる鎧が霧を弾いた。", "shop");
@@ -1399,6 +1530,7 @@ async function eventBoss() {
   tellEvent(`☠ B${player.floor}F ボス：${m.name}`, `${m.flavor}\n\n──── これより先、逃げる事は叶わない。`, "boss");
   await pause("戦闘開始");
   const won = await combat(m, false);
+  if (won) addShardsToRun(`${m.name}撃破`, 2);
   if (won && player.floor === FINAL_FLOOR) await ending();
 }
 
@@ -1432,19 +1564,26 @@ async function titleScreen() {
     `);
     if (!LS_OK) tell("⚠ ローカル保存が利用できない環境です。セーブと記録は保持されません。", "danger");
 
+    const meta = loadMeta();
+    if (meta.shards > 0 || meta.totalShards > 0) {
+      tell(`💎 記憶の欠片: ${meta.shards}（累計 ${meta.totalShards}）`, "shop");
+    }
+
     const save = loadSave();
     const opts = [{ label: "はじめから", desc: save ? "現在のセーブは破棄される" : "新しい冒険を始める" }];
     if (save) {
       const p = save.player;
+      const dl = (p.difficulty && DIFFICULTIES[p.difficulty]) ? DIFFICULTIES[p.difficulty].label : "挑戦";
       opts.push({
         label: "続きから",
-        desc: `${p.name}(${p.cls}) Lv${p.level} B${p.floor}F  保存 ${fmtDate(save.savedAt)}`,
+        desc: `${p.name}(${p.cls}/${dl}) Lv${p.level} B${p.floor}F  保存 ${fmtDate(save.savedAt)}`,
       });
     } else {
       opts.push({ label: "続きから", desc: "セーブデータなし", disabled: true });
     }
-    opts.push({ label: "冒険記録", desc: "実績・最高記録を見る" });
-    opts.push({ label: "記録を消す", desc: "セーブ・記録・実績を全削除" });
+    opts.push({ label: "冒険記録",   desc: "実績・最高記録を見る" });
+    opts.push({ label: "記憶の強化", desc: `欠片で永続強化（所持 ${meta.shards}）` });
+    opts.push({ label: "記録を消す", desc: "セーブのみ／全記録を選択" });
 
     const idx = await ask(opts);
     if (idx === 0) {
@@ -1462,7 +1601,9 @@ async function titleScreen() {
     } else if (idx === 2) {
       await showRecords();
     } else if (idx === 3) {
-      await confirmReset();
+      await showUpgradeShop();
+    } else if (idx === 4) {
+      await deleteMenu();
     }
   }
 }
@@ -1479,10 +1620,36 @@ async function startNewGame() {
   }));
   const idx = await ask(opts);
   const cls = Object.keys(CLASSES)[idx];
+
+  // 難易度選択
+  tellTitle("難易度選択");
+  const dKeys = Object.keys(DIFFICULTIES);
+  const dOpts = dKeys.map(k => {
+    const d = DIFFICULTIES[k];
+    const detail = `敵HP×${d.enemyHP}/敵攻×${d.enemyAtk}/階回復${Math.round(d.floorHeal*100)}%/スコア×${d.scoreMul}`;
+    return { label: d.label, desc: `${d.desc}　(${detail})` };
+  });
+  const dIdx = await ask(dOpts);
+  const difficulty = dKeys[dIdx];
+
   player = newPlayer(name, cls);
+  player.difficulty = difficulty;
   runStats = newRunStats();
+  // 強化適用
+  applyUpgrades(player);
+
+  // 適用結果を簡潔に通知
+  const meta = loadMeta();
+  const u = meta.upgrades;
+  const upMsgs = [];
+  if (u.potion)   upMsgs.push(`旅支度 Lv${u.potion}：ポーション+${u.potion}`);
+  if (u.vitality) upMsgs.push(`体力修練 Lv${u.vitality}：最大HP+${u.vitality*5}`);
+  if (u.purse)    upMsgs.push(`小銭袋 Lv${u.purse}：所持金+${u.purse*20}G`);
+  if (u.amulet)   upMsgs.push("旅の護符：1冒険1回、致命傷をHP1で耐える");
+
   clearNarrative();
-  tellEvent("冒険の始まり", `${name}（${cls}）は迷宮の入口に立った。`);
+  tellEvent("冒険の始まり", `${name}（${cls}）は ${DIFFICULTIES[difficulty].label} の迷宮へ向かった。`);
+  if (upMsgs.length) tell("✦ 記憶の強化が発動: " + upMsgs.join(" / "), "shop");
   await pause("迷宮に入る");
   return true;
 }
@@ -1498,8 +1665,18 @@ async function resumeGame() {
     player   = data.player;
     runStats = normalizeRunStats(data.runStats);
     if (typeof player.hp !== "number" || player.hp <= 0) throw new Error("invalid save");
+    // 旧セーブ互換：difficultyが無い／未知の値ならchallenge扱い（既存プレイ感維持）
+    if (!player.difficulty || !DIFFICULTIES[player.difficulty]) player.difficulty = DEFAULT_DIFFICULTY;
+    // 旧セーブで階を進めていた場合、その階の欠片マークを既得扱いにする
+    // （retroactive grantはしない＝悪用防止）
+    const f = player.floor;
+    runStats.shardMarks = runStats.shardMarks || {};
+    if (f >= 5  && runStats.shardMarks[5]  === undefined) runStats.shardMarks[5]  = true;
+    if (f >= 10 && runStats.shardMarks[10] === undefined) runStats.shardMarks[10] = true;
+    if (f >= 15 && runStats.shardMarks[15] === undefined) runStats.shardMarks[15] = true;
     clearNarrative();
-    tellEvent("冒険の再開", `${player.name}（${player.cls}）は B${player.floor}F で目を覚ました。`);
+    const dl = DIFFICULTIES[player.difficulty].label;
+    tellEvent("冒険の再開", `${player.name}（${player.cls}/${dl}）は B${player.floor}F で目を覚ました。`);
     await pause("続ける");
     return true;
   } catch (e) {
@@ -1516,6 +1693,7 @@ async function showRecords() {
   const a = loadAchievements();
   const unlockedCount = ACHIEVEMENTS.filter(x => a[x.id]).length;
 
+  const meta = loadMeta();
   let html = `<div class="endcard">
     <h2>📜 冒険記録</h2>
     <table>
@@ -1526,16 +1704,30 @@ async function showRecords() {
       <tr><td>戦士 最高 / クリア</td><td>${r.classBest["戦士"]}F / ${r.classClears["戦士"]}回</td></tr>
       <tr><td>盗賊 最高 / クリア</td><td>${r.classBest["盗賊"]}F / ${r.classClears["盗賊"]}回</td></tr>
       <tr><td>魔導士 最高 / クリア</td><td>${r.classBest["魔導士"]}F / ${r.classClears["魔導士"]}回</td></tr>
+    </table>
+    <h3>難易度別</h3>
+    <table>
+      <tr><td>物語 最高 / クリア</td><td>${r.byDiff.story.highestFloor}F / ${r.byDiff.story.clears}回</td></tr>
+      <tr><td>標準 最高 / クリア</td><td>${r.byDiff.normal.highestFloor}F / ${r.byDiff.normal.clears}回</td></tr>
+      <tr><td>挑戦 最高 / クリア</td><td>${r.byDiff.challenge.highestFloor}F / ${r.byDiff.challenge.clears}回</td></tr>
+    </table>
+    <h3>💎 記憶の欠片</h3>
+    <table>
+      <tr><td>所持</td><td>${meta.shards}</td></tr>
+      <tr><td>累計獲得</td><td>${meta.totalShards}</td></tr>
     </table>`;
   if (r.lastResult) {
     const lr = r.lastResult;
     const tag = lr.kind === "win" ? "🎉 勝利" : "☠ 敗北";
+    const dl  = (lr.difficulty && DIFFICULTIES[lr.difficulty]) ? DIFFICULTIES[lr.difficulty].label : "—";
+    const upTag = lr.hasUpgrades ? " ✦ 強化あり" : "";
     html += `<h3>最終冒険</h3>
       <table>
-        <tr><td>結果</td><td>${tag}</td></tr>
+        <tr><td>結果</td><td>${tag}（${dl}${upTag}）</td></tr>
         <tr><td>勇者</td><td>${escapeHtml(lr.name)} (${lr.cls})</td></tr>
         <tr><td>到達階 / Lv</td><td>B${lr.floor}F / Lv${lr.level}</td></tr>
         <tr><td>撃破 / 最大ダメ</td><td>${lr.kills}体 / ${lr.maxDamage}</td></tr>
+        <tr><td>獲得欠片</td><td>${lr.earnedShards || 0} 個</td></tr>
         <tr><td>${lr.kind === "win" ? "勝因" : "死因"}</td><td>${escapeHtml(lr.reason || "—")}</td></tr>
         <tr><td>スコア</td><td class="score">${lr.score}</td></tr>
       </table>`;
@@ -1555,20 +1747,77 @@ async function showRecords() {
   await pause("戻る");
 }
 
-async function confirmReset() {
+async function deleteMenu() {
   clearNarrative();
-  tellEvent("⚠ 全記録の削除", "セーブ・冒険記録・実績を全て削除する。\n本当に良いか？", "danger");
-  const idx = await ask([{ label: "削除する", desc: "すべて初期化" }, { label: "やめる" }]);
+  tellEvent("削除メニュー", "削除する範囲を選んでください。\n冒険記録・実績・記憶の強化は通常のプレイで蓄積されるデータです。");
+  const idx = await ask([
+    { label: "進行中セーブだけ削除", desc: "次の冒険から開始（記録・実績・強化は維持）" },
+    { label: "全記録削除",           desc: "セーブ・冒険記録・実績・記憶の強化を全削除" },
+    { label: "戻る" },
+  ]);
   if (idx === 0) {
-    wipeAllStorage();
-    tell("全ての記録を消去した。", "shop");
+    wipeSaveOnly();
+    tell("進行中セーブを削除した。", "shop");
     await pause("戻る");
+  } else if (idx === 1) {
+    clearNarrative();
+    tellEvent("⚠ 全記録削除", "セーブ・冒険記録・実績・記憶の強化（欠片＆購入済み強化）を全て削除する。\n本当に良いか？", "danger");
+    const c = await ask([{ label: "削除する", desc: "全て初期化" }, { label: "やめる" }]);
+    if (c === 0) {
+      wipeAllStorage();
+      tell("全ての記録を消去した。", "shop");
+      await pause("戻る");
+    }
+  }
+}
+
+async function showUpgradeShop() {
+  while (true) {
+    const meta = loadMeta();
+    clearNarrative();
+    let html = `<div class="endcard">
+      <h2>💎 記憶の強化</h2>
+      <table>
+        <tr><td>所持欠片</td><td class="score">${meta.shards}</td></tr>
+        <tr><td>累計獲得</td><td>${meta.totalShards}</td></tr>
+      </table>
+      <p style="margin-top:6px; font-size:11px; color:var(--dim);">
+        死亡しても欠片は失われない。次の冒険までに強化を購入できる。
+      </p>
+    </div>`;
+    tellRaw(html);
+
+    const opts = UPGRADES.map(u => {
+      const lv = meta.upgrades[u.id] || 0;
+      const maxed = lv >= u.maxLv;
+      const cost = maxed ? null : u.costs[lv];
+      const lvLabel = `Lv${lv}/${u.maxLv}`;
+      const label = `${u.name}  ${lvLabel}${maxed ? "  (最大)" : `  →${cost}欠片`}`;
+      const desc  = u.desc;
+      const disabled = maxed || meta.shards < cost;
+      return { label, desc, disabled };
+    });
+    opts.push({ label: "戻る" });
+    const idx = await ask(opts);
+    if (idx === opts.length - 1) return;
+    const u = UPGRADES[idx];
+    const lv = meta.upgrades[u.id] || 0;
+    if (lv >= u.maxLv) continue;
+    const cost = u.costs[lv];
+    if (meta.shards < cost) continue;
+    meta.shards -= cost;
+    meta.upgrades[u.id] = lv + 1;
+    saveMeta(meta);
+    tell(`${u.name} Lv${lv+1} を習得した！（残り欠片 ${meta.shards}）`, "shop");
+    await pause("続ける");
   }
 }
 
 function computeScore(kind) {
-  if (kind === "win") return player.gold + player.level * 100 + player.max_hp * 5;
-  return player.gold + player.level * 50 + player.floor * 30;
+  const base = kind === "win"
+    ? player.gold + player.level * 100 + player.max_hp * 5
+    : player.gold + player.level * 50 + player.floor * 30;
+  return Math.floor(base * diffCfg().scoreMul);
 }
 
 function buildEndCard(kind, reason) {
@@ -1593,9 +1842,28 @@ function buildEndCard(kind, reason) {
     ? `<h3>クラス特技</h3><table>${skills.map(([k,v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("")}</table>`
     : "";
 
+  // 難易度・強化フラグ
+  const dCfg = diffCfg();
+  const dLabel = dCfg.label;
+  const meta = loadMeta();
+  const hasUpgrades = Object.values(meta.upgrades).some(v => v > 0);
+  const upgradeTag = hasUpgrades ? `<span class="badge">✦ 記憶の強化あり</span>` : "";
+
+  // 獲得欠片の内訳
+  const earned = runStats.earnedShards || 0;
+  let shardBlock = "";
+  if (earned > 0) {
+    const lines = (runStats.shardLog || []).map(e => `<tr><td>${escapeHtml(e.reason)}</td><td>+${e.amount}</td></tr>`).join("");
+    shardBlock = `<h3>💎 記憶の欠片  +${earned}</h3><table>${lines}</table>`;
+  }
+
   return `<div class="endcard">
     <h1 class="${titleClass}">${titleText}</h1>
     <div class="reason">${escapeHtml(reason)}</div>
+    <div class="badge-list" style="margin-bottom:8px;">
+      <span class="badge">難易度: ${dLabel}</span>
+      ${upgradeTag}
+    </div>
     <table>
       <tr><td>勇者</td><td>${escapeHtml(player.name)} (${player.cls})</td></tr>
       <tr><td>到達階 / Lv</td><td>B${player.floor}F / Lv${player.level}</td></tr>
@@ -1608,6 +1876,7 @@ function buildEndCard(kind, reason) {
       <tr><td>総合スコア</td><td class="score">${score}</td></tr>
     </table>
     ${skillsBlock}
+    ${shardBlock}
     ${badges}
     <p style="margin-top:14px; font-style:italic; color:var(--dim);">${tagline}</p>
   </div>`;
@@ -1628,13 +1897,17 @@ function captureNewAchievements(fn) {
 }
 
 async function ending() {
-  // 実績判定
+  // 実績判定（unlockAch内で初回ならshardが+1される）
   captureNewAchievements(() => {
     unlockAch("savior");
     unlockAch({ "戦士": "warrior_clear", "盗賊": "rogue_clear", "魔導士": "mage_clear" }[player.cls]);
     const a = loadAchievements();
     if (a.warrior_clear && a.rogue_clear && a.mage_clear) unlockAch("all_classes");
   });
+  // クリア固定ボーナス
+  addShardsToRun("クリア達成", 5);
+  // 累計欠片をメタへ確定反映
+  addShards(runStats.earnedShards || 0);
   const reason = `魔王ザロスを討伐し、迷宮の闇を払った。`;
   recordRunResult("win", computeScore("win"), reason);
   clearSave();
@@ -1656,6 +1929,8 @@ async function ending() {
 }
 
 async function gameOver() {
+  // 死亡時：これまで稼いだ欠片を確定でメタへ反映（クリアボーナスは無し）
+  addShards(runStats ? (runStats.earnedShards || 0) : 0);
   const reason = runStats && runStats.lastDamageSource
     ? `${runStats.lastDamageSource} に倒された。`
     : `力尽きた。`;
@@ -1708,6 +1983,22 @@ async function gameLoop() {
         await openInventory(false);
       }
       player.floor += 1;
+
+      // === 階移動時の難易度別回復 ===
+      const heal_ratio = diffCfg().floorHeal;
+      if (heal_ratio > 0) {
+        const amt = Math.max(1, Math.floor(player.max_hp * heal_ratio));
+        const actually = heal(player, amt);
+        if (actually > 0) tell(`新たな階で気力が戻った。HPが ${actually} 回復した。`, "heal");
+      }
+
+      // === 階層到達による欠片（一度きり） ===
+      const f = player.floor;
+      const marks = runStats.shardMarks = runStats.shardMarks || {};
+      if (f >= 5  && !marks[5])  { marks[5]  = true; addShardsToRun("B5F到達",  1); tell("✦ 記憶の欠片を1つ得た。", "shop"); }
+      if (f >= 10 && !marks[10]) { marks[10] = true; addShardsToRun("B10F到達", 2); tell("✦ 記憶の欠片を2つ得た。", "shop"); }
+      if (f >= 15 && !marks[15]) { marks[15] = true; addShardsToRun("B15F到達", 3); tell("✦ 記憶の欠片を3つ得た。", "shop"); }
+
       renderStatus();
     }
   } catch (e) {
