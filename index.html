@@ -348,6 +348,51 @@ input.text-input:focus { border-color: var(--accent); }
 .endcard td:last-child  { text-align: right; font-weight: 500; }
 .endcard tr.ach-row td { padding: 4px 10px; font-size: 12px; }
 .score { font-size: 22px; font-weight: 700; color: var(--accent); }
+
+/* === 終了カード/記録画面 視覚補強 === */
+.endcard h3.depth-h3 { color: var(--magenta); }
+.endcard .section-card {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin: 10px 0 6px;
+}
+.endcard .section-card.depth { border-left: 3px solid var(--magenta); }
+.endcard .section-card h3 { margin: 0 0 4px; }
+.endcard .section-card table { font-size: 13px; }
+.endcard .replay-line {
+  margin: 8px 0 4px;
+  padding: 8px 12px;
+  background: linear-gradient(90deg, rgba(255,206,94,0.10), var(--bg3));
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--fg);
+  text-align: left;
+  line-height: 1.5;
+}
+.endcard .hint-line {
+  margin: 4px 0 8px;
+  padding: 6px 10px;
+  background: rgba(95,168,255,0.08);
+  border-left: 2px solid var(--blue);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--blue);
+  text-align: left;
+}
+.endcard .eval-tag {
+  display: inline-block;
+  font-size: 12px;
+  color: var(--accent);
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 2px 10px;
+  margin: 4px 0;
+}
 .badge-list {
   display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; margin-top: 8px;
 }
@@ -437,7 +482,7 @@ input.text-input:focus { border-color: var(--accent); }
 // ====================================================================
 const FINAL_FLOOR = 20;
 const BOSS_FLOORS = new Set([5, 10, 15, 20]);
-const APP_VERSION = "v20260510-rogue-plus3";
+const APP_VERSION = "v20260510-rogue-plus4";
 // 開発確認用：URLに ?debug=1 が付いているときだけ有効化する。
 // 通常プレイでは false 固定で、UIも出ない。
 const DEBUG_MODE = (() => {
@@ -3106,28 +3151,34 @@ async function showRecords() {
       <tr><td>挑戦</td><td>最高 ${r.byDiff.challenge.highestFloor}F / クリア ${r.byDiff.challenge.clears}回</td></tr>
     </table>
 
-    <h3>🌑 深層探索</h3>
-    <table>
-      <tr><td>最高到達階</td><td>${r.endlessBestFloor || 0}F</td></tr>
-      <tr><td>最高スコア</td><td>${r.endlessBestScore || 0}</td></tr>
-      <tr><td>最大撃破数</td><td>${r.endlessBestKills || 0}体</td></tr>
-      <tr><td>最大深層ボス撃破</td><td>${r.endlessBestBossKills || 0}体</td></tr>
-      <tr><td>挑戦 / 死亡</td><td>${r.endlessRuns || 0}回 / ${r.endlessDeaths || 0}回</td></tr>
-    </table>
+    <div class="section-card depth">
+      <h3 class="depth-h3">🌑 深層探索</h3>
+      <table>
+        <tr><td>最高到達階</td><td>${r.endlessBestFloor || 0}F</td></tr>
+        <tr><td>最高スコア</td><td>${r.endlessBestScore || 0}</td></tr>
+        <tr><td>最大撃破数</td><td>${r.endlessBestKills || 0}体</td></tr>
+        <tr><td>最大深層ボス撃破</td><td>${r.endlessBestBossKills || 0}体</td></tr>
+        <tr><td>挑戦 / 死亡</td><td>${r.endlessRuns || 0}回 / ${r.endlessDeaths || 0}回</td></tr>
+      </table>
+    </div>
 
-    <h3>🌑 深層 クラス別</h3>
-    <table>
-      <tr><td>戦士</td><td>${r.endlessBestByClass["戦士"] || 0}F</td></tr>
-      <tr><td>盗賊</td><td>${r.endlessBestByClass["盗賊"] || 0}F</td></tr>
-      <tr><td>魔導士</td><td>${r.endlessBestByClass["魔導士"] || 0}F</td></tr>
-    </table>
+    <div class="section-card depth">
+      <h3 class="depth-h3">🌑 深層 クラス別</h3>
+      <table>
+        <tr><td>戦士</td><td>${r.endlessBestByClass["戦士"] || 0}F</td></tr>
+        <tr><td>盗賊</td><td>${r.endlessBestByClass["盗賊"] || 0}F</td></tr>
+        <tr><td>魔導士</td><td>${r.endlessBestByClass["魔導士"] || 0}F</td></tr>
+      </table>
+    </div>
 
-    <h3>🌑 深層 難易度別</h3>
-    <table>
-      <tr><td>物語</td><td>${r.endlessBestByDifficulty.story.highestFloor || 0}F</td></tr>
-      <tr><td>標準</td><td>${r.endlessBestByDifficulty.normal.highestFloor || 0}F</td></tr>
-      <tr><td>挑戦</td><td>${r.endlessBestByDifficulty.challenge.highestFloor || 0}F</td></tr>
-    </table>
+    <div class="section-card depth">
+      <h3 class="depth-h3">🌑 深層 難易度別</h3>
+      <table>
+        <tr><td>物語</td><td>${r.endlessBestByDifficulty.story.highestFloor || 0}F</td></tr>
+        <tr><td>標準</td><td>${r.endlessBestByDifficulty.normal.highestFloor || 0}F</td></tr>
+        <tr><td>挑戦</td><td>${r.endlessBestByDifficulty.challenge.highestFloor || 0}F</td></tr>
+      </table>
+    </div>
 
     <h3>💎 記憶の強化</h3>
     <table>
@@ -3299,17 +3350,34 @@ function determineRunEvaluation(kind = "loss") {
 }
 function buildReplayLine() {
   if (!player || !runStats) return "";
-  const weapon = equipLabel("weapon");
+  const isEndless = player.mode === "endless";
+  const stage = isEndless ? "深層" : "迷宮";
+  const forged = (runStats.forgeWeaponCount || 0) + (runStats.forgeArmorCount || 0);
+  const blessed = (runStats.blessingChoices || []).length;
   if (player.cls === "戦士") {
-    return `戦士は${weapon}を携え、${runStats.warriorCounters || 0}度の反撃で迷宮を押し返した。`;
+    if (forged >= 2) return `戦士は剣を鍛え、${stage}の影に挑んだ。`;
+    if ((runStats.warriorCounters || 0) >= 5) return `戦士は反撃を磨き、迫る牙を退けた。`;
+    if ((runStats.warriorBossKills || 0) >= 2) return `戦士はボスの首を獲り、勇名を響かせた。`;
+    if (blessed >= 3) return `戦士は祝福を重ね、迷宮の試練を越えた。`;
+    return `戦士は剣を握り、B${player.floor}Fまで歩を進めた。`;
   }
   if (player.cls === "盗賊") {
-    return `盗賊は罠を避け、宝と煙に紛れてB${player.floor}Fまで駆けた。`;
+    if ((runStats.rogueEscapes || 0) >= 4 || (runStats.fleeSuccessCount || 0) >= 4)
+      return `盗賊は煙に紛れ、危地を幾度もすり抜けた。`;
+    if ((runStats.rogueTrapAvoids || 0) >= 3) return `盗賊は罠を避け、宝を抱えて${stage}を駆けた。`;
+    if ((runStats.rogueGoodLoots || 0) + (runStats.rogueDiscounts || 0) >= 4)
+      return `盗賊は目利きを利かせ、${stage}の値を見抜いた。`;
+    if ((runStats.totalGoldGained || 0) >= 600) return `盗賊は金貨を積み上げ、影を渡った。`;
+    return `盗賊は静かに歩み、B${player.floor}Fまで駆けた。`;
   }
   if (player.cls === "魔導士") {
-    return `魔導士は巻物の力を操り、深い記憶を読み解いた。`;
+    if ((runStats.scrollUseCount || 0) >= 5) return `魔導士は巻物を解き放ち、敵を焼き尽くした。`;
+    if ((runStats.mageScrollSaves || 0) >= 3) return `魔導士は節約の術で、巻物の力を残した。`;
+    if ((runStats.mageEventInsights || 0) >= 3) return `魔導士は叡智で${stage}の謎を読み解いた。`;
+    if (forged >= 2) return `魔導士は杖を整え、深い記憶へ降りていった。`;
+    return `魔導士は呪文を唱え、B${player.floor}Fまで進んだ。`;
   }
-  return `${player.name}はB${player.floor}Fまで進んだ。`;
+  return `${player.name}は${stage}のB${player.floor}Fまで歩んだ。`;
 }
 function buildDeathHint(kind) {
   if (kind === "win" || !player || !runStats) return "";
@@ -3319,6 +3387,9 @@ function buildDeathHint(kind) {
   if ((player.gold || 0) >= 250) return "GOLDを使い切れなかった。";
   if (countInventory("煙玉") > 0 && !isBossBattleFloor(player.floor)) return "逃走手段を残したまま倒れた。";
   if (isBossBattleFloor(player.floor)) return "ボス戦への備えが不足していたかもしれない。";
+  if ((player.weaponEnhance || 0) === 0) return "鍛冶屋で武器を鍛える機会も活かしたい。";
+  if (countInventory("毒消し草") === 0 && hasEffect(player, "poison")) return "毒消し草の備えも忘れずに。";
+  if ((runStats.blessingChoices || []).length === 0 && player.floor >= 5) return "ボス勝利後の祝福3択も活用したい。";
   return "次は回復と逃走の余裕を残したい。";
 }
 function classActivityRows() {
@@ -3387,11 +3458,16 @@ function buildEndCard(kind, reason) {
     ? `<div class="badge-list">${newlyEarned.map(d => `<span class="badge">🏆 ${escapeHtml(d.name)}</span>`).join("")}</div>`
     : "";
 
+  // 職業別活躍：すべての値が0なら全体非表示（行のみ非表示にすると h3 だけ残るため）
   const activityRows = classActivityRows();
-  const skillsBlock = `<h3>職業別活躍</h3><table>
-    ${activityRows.map(([k,v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("")}
-    <tr><td>特性発動合計</td><td>${runStats.classFeatureTriggers || 0} 回</td></tr>
-  </table>`;
+  const activityTotal = activityRows.reduce((s, [, v]) => s + (parseInt(v, 10) || 0), 0);
+  const featureTotal = runStats.classFeatureTriggers || 0;
+  const skillsBlock = (activityTotal + featureTotal) > 0
+    ? `<h3>職業別活躍</h3><table>
+        ${activityRows.map(([k,v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("")}
+        <tr><td>特性発動合計</td><td>${featureTotal} 回</td></tr>
+      </table>`
+    : "";
 
   // クラス成長一覧
   let growthBlock = "";
@@ -3417,7 +3493,7 @@ function buildEndCard(kind, reason) {
     ? `<div class="badge-list" style="margin-top:8px;"><span class="badge" style="font-size:13px;">称号: ${escapeHtml(title)}</span></div>`
     : "";
 
-  // 記憶の商人 購入品
+  // 記憶の商人 購入品（購入0なら全体非表示）
   let mmBlock = "";
   const mmps = runStats.memoryMerchantPurchases || [];
   const mmSpent = mmps.reduce((s, p) => s + (p.cost || 0), 0);
@@ -3427,8 +3503,6 @@ function buildEndCard(kind, reason) {
       return `<tr><td>${escapeHtml(p.item)}${qtyTag}</td><td>${p.cost}欠片</td></tr>`;
     }).join("");
     mmBlock = `<h3>記憶の商人</h3><table>${lines}<tr><td>消費欠片</td><td>${mmSpent} 個</td></tr></table>`;
-  } else if (isEndless) {
-    mmBlock = `<h3>記憶の商人</h3><table><tr><td>利用</td><td>なし</td></tr><tr><td>消費欠片</td><td>0 個</td></tr></table>`;
   }
 
   // 難易度・強化フラグ
@@ -3469,14 +3543,16 @@ function buildEndCard(kind, reason) {
         <tr><td>使用GOLD</td><td>${runStats.forgeGoldSpent || 0}G</td></tr>
       </table>`
     : "";
+  // 「今回の冒険」をテーブルではなく、評価バッジ＋一言リプレイ＋ヒントとして見せる
   const evaluation = determineRunEvaluation(kind);
   const replay = buildReplayLine();
   const hint = buildDeathHint(kind);
-  const adventureBlock = `<h3>今回の冒険</h3><table>
-    <tr><td>評価</td><td>${escapeHtml(evaluation)}</td></tr>
-    <tr><td>一言</td><td>${escapeHtml(replay)}</td></tr>
-    ${hint ? `<tr><td>次回ヒント</td><td>${escapeHtml(hint)}</td></tr>` : ""}
-  </table>`;
+  const evalTag = evaluation ? `<div class="eval-tag">評価：${escapeHtml(evaluation)}</div>` : "";
+  const replayLine = replay ? `<div class="replay-line">${escapeHtml(replay)}</div>` : "";
+  const hintLine = hint ? `<div class="hint-line">💡 ${escapeHtml(hint)}</div>` : "";
+  const adventureBlock = (evalTag || replayLine || hintLine)
+    ? `${evalTag}${replayLine}${hintLine}`
+    : "";
 
   return `<div class="endcard">
     <h1 class="${titleClass}">${titleText}</h1>
