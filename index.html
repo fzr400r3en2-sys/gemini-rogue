@@ -437,7 +437,7 @@ input.text-input:focus { border-color: var(--accent); }
 // ====================================================================
 const FINAL_FLOOR = 20;
 const BOSS_FLOORS = new Set([5, 10, 15, 20]);
-const APP_VERSION = "v20260510-rogue-plus2";
+const APP_VERSION = "v20260510-rogue-plus3";
 // 開発確認用：URLに ?debug=1 が付いているときだけ有効化する。
 // 通常プレイでは false 固定で、UIも出ない。
 const DEBUG_MODE = (() => {
@@ -992,6 +992,7 @@ function newRunStats(mode = "story") {
     merchantIntroAvailable: false, // 商人の紹介状: 次の通常商人で初購入10%引き
     // 深層探索モード関連
     depthBossKills: 0, // この冒険で撃破した深層ボス数
+    milestoneFloors: {}, // 節目イベント発火済み floor のセット {31:true,41:true,...}
     // ビルド・鍛冶・祝福
     blessingChoices: [],
     blessingCount: 0,
@@ -1045,6 +1046,7 @@ function normalizeRunStats(rs) {
   if (!Array.isArray(out.memoryMerchantPurchases)) out.memoryMerchantPurchases = [];
   if (typeof out.merchantIntroAvailable !== "boolean") out.merchantIntroAvailable = false;
   if (typeof out.depthBossKills !== "number") out.depthBossKills = 0;
+  if (!out.milestoneFloors || typeof out.milestoneFloors !== "object") out.milestoneFloors = {};
   [
     "classFeatureTriggers",
     "warriorCounters", "warriorDefends", "warriorBossKills",
@@ -2411,13 +2413,22 @@ async function eventDepthCampfire() {
   }
 }
 async function eventDepthMilestone() {
-  if (!isEndlessMode() || player.floor < 30 || player.floor % 10 !== 0) return;
+  // 節目イベントは深層ボスの「直後の階」(31/41/51/61...) で1度だけ発火。
+  // 深層ボス階(30/40/50)で連続発火するとテンポが悪いため位置をずらした。
+  if (!isEndlessMode() || player.floor < 31 || (player.floor - 1) % 10 !== 0) return;
+  if (!runStats.milestoneFloors) runStats.milestoneFloors = {};
+  if (runStats.milestoneFloors[player.floor]) return;
+  runStats.milestoneFloors[player.floor] = true;
   const events = [
     eventDepthCampfire,
     () => eventForge(0.8, "忘れられた鍛冶場"),
     () => offerMinorDepthBlessing("記憶の分岐路"),
   ];
   await choice(events)();
+}
+// 節目イベントを発火すべき階か（メインループからの判定用）
+function isMilestoneFloor(f) {
+  return isEndlessMode() && f >= 31 && (f - 1) % 10 === 0;
 }
 
 const EVENTS_NORMAL = [
@@ -2430,7 +2441,7 @@ const EVENTS_NORMAL = [
   [eventFountain,  5],
   [eventRiddle,    4],
   [eventGamble,    4],
-  [eventForge,      3],
+  [eventForge,      6],
 ];
 function pickEvent() { return weightedChoice(EVENTS_NORMAL); }
 
@@ -2464,7 +2475,8 @@ async function eventBoss() {
   if (won && player.floor === FINAL_FLOOR && !isEndless) await ending();
   if (won && (isEndless || player.floor < FINAL_FLOOR)) {
     await offerBlessingChoice(isEndless ? "深層ボス" : "ボス");
-    if (isEndless) await eventDepthMilestone();
+    // 深層ボス階では節目イベントは出さない（実プレイでテンポが悪かったため除去）。
+    // 節目イベントはボスの直後の階（31/41/51F等）でメインループから発火する。
   }
 }
 
@@ -3101,8 +3113,20 @@ async function showRecords() {
       <tr><td>最大撃破数</td><td>${r.endlessBestKills || 0}体</td></tr>
       <tr><td>最大深層ボス撃破</td><td>${r.endlessBestBossKills || 0}体</td></tr>
       <tr><td>挑戦 / 死亡</td><td>${r.endlessRuns || 0}回 / ${r.endlessDeaths || 0}回</td></tr>
-      <tr><td>クラス最高</td><td>戦士 ${r.endlessBestByClass["戦士"] || 0}F / 盗賊 ${r.endlessBestByClass["盗賊"] || 0}F / 魔導士 ${r.endlessBestByClass["魔導士"] || 0}F</td></tr>
-      <tr><td>難易度最高</td><td>物語 ${r.endlessBestByDifficulty.story.highestFloor || 0}F / 標準 ${r.endlessBestByDifficulty.normal.highestFloor || 0}F / 挑戦 ${r.endlessBestByDifficulty.challenge.highestFloor || 0}F</td></tr>
+    </table>
+
+    <h3>🌑 深層 クラス別</h3>
+    <table>
+      <tr><td>戦士</td><td>${r.endlessBestByClass["戦士"] || 0}F</td></tr>
+      <tr><td>盗賊</td><td>${r.endlessBestByClass["盗賊"] || 0}F</td></tr>
+      <tr><td>魔導士</td><td>${r.endlessBestByClass["魔導士"] || 0}F</td></tr>
+    </table>
+
+    <h3>🌑 深層 難易度別</h3>
+    <table>
+      <tr><td>物語</td><td>${r.endlessBestByDifficulty.story.highestFloor || 0}F</td></tr>
+      <tr><td>標準</td><td>${r.endlessBestByDifficulty.normal.highestFloor || 0}F</td></tr>
+      <tr><td>挑戦</td><td>${r.endlessBestByDifficulty.challenge.highestFloor || 0}F</td></tr>
     </table>
 
     <h3>💎 記憶の強化</h3>
@@ -3433,17 +3457,18 @@ function buildEndCard(kind, reason) {
     <tr><td>報酬</td><td>${escapeHtml(mini.reward || "—")}</td></tr>
   </table>` : "";
   const blessings = runStats.blessingChoices || [];
-  const blessingBlock = `<h3>祝福</h3><table>${
-    blessings.length
-      ? blessings.map(b => `<tr><td>B${b.floor}F</td><td>${escapeHtml(b.name)}</td></tr>`).join("")
-      : `<tr><td>選択</td><td>なし</td></tr>`
-  }</table>`;
-  const forgeBlock = `<h3>鍛冶記録</h3><table>
-    <tr><td>武器強化</td><td>${runStats.forgeWeaponCount || 0} 回</td></tr>
-    <tr><td>防具強化</td><td>${runStats.forgeArmorCount || 0} 回</td></tr>
-    <tr><td>使用GOLD</td><td>${runStats.forgeGoldSpent || 0}G</td></tr>
-    <tr><td>最終強化</td><td>武器 +${player.weaponEnhance || 0} / 防具 +${player.armorEnhance || 0}</td></tr>
-  </table>`;
+  // 1度も祝福を選んでない場合は祝福ブロック自体を表示しない（iPhoneでの冗長行を削減）
+  const blessingBlock = blessings.length
+    ? `<h3>祝福</h3><table>${blessings.map(b => `<tr><td>B${b.floor}F</td><td>${escapeHtml(b.name)}</td></tr>`).join("")}</table>`
+    : "";
+  // 鍛冶記録は強化発生時のみ表示。発生数と使用GOLDを1行に圧縮し「最終強化」は本体テーブルの装備行と重複するため省略。
+  const forgedAny = (runStats.forgeWeaponCount || 0) + (runStats.forgeArmorCount || 0) > 0;
+  const forgeBlock = forgedAny
+    ? `<h3>鍛冶記録</h3><table>
+        <tr><td>強化回数</td><td>武器 ${runStats.forgeWeaponCount || 0} / 防具 ${runStats.forgeArmorCount || 0}</td></tr>
+        <tr><td>使用GOLD</td><td>${runStats.forgeGoldSpent || 0}G</td></tr>
+      </table>`
+    : "";
   const evaluation = determineRunEvaluation(kind);
   const replay = buildReplayLine();
   const hint = buildDeathHint(kind);
@@ -3711,6 +3736,9 @@ async function gameLoop() {
         : BOSS_FLOORS.has(player.floor);
       if (bossFloor) {
         await eventBoss();
+      } else if (isMilestoneFloor(player.floor) && runStats.milestoneFloors && !runStats.milestoneFloors[player.floor]) {
+        // 深層ボス直後の階（31/41/51F…）で節目イベントを1回だけ発火し、通常イベント抽選を置換
+        await eventDepthMilestone();
       } else {
         // クラス専用イベント抽選：基礎7%、5階連続未発生で次階は25%（天井方式）
         const classFn = CLASS_EVENT_MAP[player.cls];
