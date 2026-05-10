@@ -38,6 +38,10 @@ html, body {
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
 }
+button, input {
+  -webkit-appearance: none;
+  appearance: none;
+}
 body {
   display: flex;
   flex-direction: column;
@@ -50,6 +54,7 @@ body {
   display: flex;
   flex-direction: column;
   flex: 1;
+  height: 100%;
   min-height: 0;
   max-width: 540px;
   width: 100%;
@@ -161,15 +166,17 @@ body {
 /* === 戦闘パネル === */
 .combat-bar {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
+  gap: 2px 6px;
   background: var(--bg3);
   border-radius: 8px;
   padding: 8px 12px;
   font-size: 13px;
   font-weight: 500;
 }
-.combat-bar .vs { color: var(--dim); margin: 0 8px; }
+.combat-bar .vs { color: var(--dim); margin: 0 4px; }
 .mhp { color: var(--red); }
 
 /* === アクション === */
@@ -193,6 +200,8 @@ body {
   cursor: pointer;
   transition: transform 0.05s, background 0.15s;
   text-align: left;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
   touch-action: manipulation;
   -webkit-user-select: none;
   user-select: none;
@@ -276,12 +285,15 @@ input.text-input:focus { border-color: var(--accent); }
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
+  table-layout: fixed;
 }
 .endcard td {
   padding: 6px 10px;
   border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
-.endcard td:first-child { color: var(--dim); text-align: left; }
+.endcard td:first-child { color: var(--dim); text-align: left; width: 38%; }
 .endcard td:last-child  { text-align: right; font-weight: 500; }
 .endcard tr.ach-row td { padding: 4px 10px; font-size: 12px; }
 .score { font-size: 22px; font-weight: 700; color: var(--accent); }
@@ -338,6 +350,21 @@ input.text-input:focus { border-color: var(--accent); }
 #narrative::-webkit-scrollbar { width: 4px; }
 #narrative::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 @media (max-height: 600px) { .title-logo { font-size: 22px; } }
+@media (max-width: 430px) {
+  #game { padding: 6px; gap: 6px; }
+  .panel { border-radius: 8px; padding: 8px 10px; }
+  .story { padding: 9px 10px; font-size: 14px; }
+  .status-grid { gap: 3px 8px; font-size: 12px; }
+  .combat-bar { font-size: 12px; padding: 7px 9px; }
+  .btn { min-height: 48px; padding: 10px 12px; font-size: 15px; border-radius: 8px; }
+  .btn.small { min-height: 44px; padding: 8px 10px; }
+  .endcard { padding: 12px; border-radius: 8px; }
+  .endcard h1 { font-size: 22px; }
+  .endcard table { font-size: 13px; }
+  .endcard td { padding: 6px 6px; }
+  .endcard td:first-child { width: 34%; }
+  .score { font-size: 20px; }
+}
 </style>
 </head>
 <body>
@@ -552,6 +579,7 @@ function removeKey(key) {
 // ---- セーブデータ ----
 function saveGame() {
   if (!player || player.hp <= 0) return;
+  if (runStats) runStats.mode = player.mode || "story";
   saveJSON(SAVE_KEY, {
     version: SAVE_VERSION,
     player: player,
@@ -583,6 +611,20 @@ const DEFAULT_RECORDS = {
     normal:    { highestFloor: 0, highestScore: 0, clears: 0, deaths: 0 },
     challenge: { highestFloor: 0, highestScore: 0, clears: 0, deaths: 0 },
   },
+  // 深層探索 専用記録（本編記録とは混ざらない）
+  endlessBestFloor:     0,
+  endlessBestScore:     0,
+  endlessBestKills:     0,
+  endlessBestBossKills: 0,
+  endlessBestByClass:   { "戦士": 0, "盗賊": 0, "魔導士": 0 },
+  endlessBestByDifficulty: {
+    story:     { highestFloor: 0, highestScore: 0, runs: 0, deaths: 0 },
+    normal:    { highestFloor: 0, highestScore: 0, runs: 0, deaths: 0 },
+    challenge: { highestFloor: 0, highestScore: 0, runs: 0, deaths: 0 },
+  },
+  endlessRuns:          0,
+  endlessDeaths:        0,
+  endlessLastResult:    null,
   lastResult: null,
 };
 function loadRecords() {
@@ -599,48 +641,44 @@ function loadRecords() {
       normal:    { ...def.byDiff.normal,    ...((r.byDiff && r.byDiff.normal)    || {}) },
       challenge: { ...def.byDiff.challenge, ...((r.byDiff && r.byDiff.challenge) || {}) },
     },
+    endlessBestByClass: { ...def.endlessBestByClass, ...(r.endlessBestByClass || {}) },
+    endlessBestByDifficulty: {
+      story:     { ...def.endlessBestByDifficulty.story,     ...((r.endlessBestByDifficulty && r.endlessBestByDifficulty.story)     || {}) },
+      normal:    { ...def.endlessBestByDifficulty.normal,    ...((r.endlessBestByDifficulty && r.endlessBestByDifficulty.normal)    || {}) },
+      challenge: { ...def.endlessBestByDifficulty.challenge, ...((r.endlessBestByDifficulty && r.endlessBestByDifficulty.challenge) || {}) },
+    },
   };
   return merged;
 }
 function saveRecords(r) { saveJSON(RECORDS_KEY, r); }
+function hasClearedStory() {
+  const r = loadRecords();
+  const a = loadAchievements();
+  return (r.clears || 0) > 0 || !!a.savior;
+}
 
 function recordRunResult(kind, score, reason) {
   const r = loadRecords();
   const fl  = (player && player.floor) || 1;
   const cls = (player && player.cls)   || "戦士";
   const diff = (player && player.difficulty && DIFFICULTIES[player.difficulty]) ? player.difficulty : DEFAULT_DIFFICULTY;
-
-  if (fl > r.highestFloor) r.highestFloor = fl;
-  if (score > r.highestScore) r.highestScore = score;
-  if (fl > (r.classBest[cls] || 0)) r.classBest[cls] = fl;
-  if (kind === "win") {
-    r.clears += 1;
-    r.classClears[cls] = (r.classClears[cls] || 0) + 1;
-  } else {
-    r.deaths += 1;
-  }
-
-  // 難易度別記録
-  const bd = r.byDiff[diff];
-  if (bd) {
-    if (fl > bd.highestFloor) bd.highestFloor = fl;
-    if (score > bd.highestScore) bd.highestScore = score;
-    if (kind === "win") bd.clears += 1; else bd.deaths += 1;
-  }
+  const isEndless = (player && player.mode === "endless");
 
   // 強化フラグ
   const meta = loadMeta();
   const hasUpgrades = Object.values(meta.upgrades).some(v => v > 0);
 
-  r.lastResult = {
+  // 共通の lastResult ペイロード
+  const payload = {
     kind, reason: reason || "",
-    name: player.name, cls, difficulty: diff,
+    name: player.name, cls, difficulty: diff, mode: player.mode || "story",
     floor: fl, level: player.level, score,
     kills:     runStats ? runStats.kills           : 0,
     maxDamage: runStats ? runStats.maxDamage       : 0,
     gold:      runStats ? runStats.totalGoldGained : 0,
     earnedShards: runStats ? (runStats.earnedShards || 0) : 0,
     title:     runStats ? (runStats.title || "")   : "",
+    depthBossKills: runStats ? (runStats.depthBossKills || 0) : 0,
     classEventSuccess: runStats ? (runStats.classEventSuccess || {warrior:0,rogue:0,mage:0}) : {warrior:0,rogue:0,mage:0},
     growthSummary: (player.classUpgrades && Object.keys(player.classUpgrades).length > 0)
       ? Object.entries(player.classUpgrades).map(([k,v]) => `${k} Lv${v}`).join(" / ") : "",
@@ -649,6 +687,46 @@ function recordRunResult(kind, score, reason) {
     weapon: player.weapon, armor: player.armor,
     date: Date.now(),
   };
+
+  if (isEndless) {
+    // 深層探索専用集計（本編記録は触らない）
+    if (fl > (r.endlessBestFloor || 0)) r.endlessBestFloor = fl;
+    if (score > (r.endlessBestScore || 0)) r.endlessBestScore = score;
+    const k = runStats ? runStats.kills : 0;
+    if (k > (r.endlessBestKills || 0)) r.endlessBestKills = k;
+    const bk = runStats ? (runStats.depthBossKills || 0) : 0;
+    if (bk > (r.endlessBestBossKills || 0)) r.endlessBestBossKills = bk;
+    if (fl > (r.endlessBestByClass[cls] || 0)) r.endlessBestByClass[cls] = fl;
+    const ebd = r.endlessBestByDifficulty[diff];
+    if (ebd) {
+      if (fl > ebd.highestFloor) ebd.highestFloor = fl;
+      if (score > ebd.highestScore) ebd.highestScore = score;
+      ebd.runs = (ebd.runs || 0) + 1;
+      if (kind === "loss") ebd.deaths = (ebd.deaths || 0) + 1;
+    }
+    r.endlessRuns = (r.endlessRuns || 0) + 1;
+    if (kind === "loss") r.endlessDeaths = (r.endlessDeaths || 0) + 1;
+    r.endlessLastResult = payload;
+  } else {
+    // 本編記録
+    if (fl > r.highestFloor) r.highestFloor = fl;
+    if (score > r.highestScore) r.highestScore = score;
+    if (fl > (r.classBest[cls] || 0)) r.classBest[cls] = fl;
+    if (kind === "win") {
+      r.clears += 1;
+      r.classClears[cls] = (r.classClears[cls] || 0) + 1;
+    } else {
+      r.deaths += 1;
+    }
+    const bd = r.byDiff[diff];
+    if (bd) {
+      if (fl > bd.highestFloor) bd.highestFloor = fl;
+      if (score > bd.highestScore) bd.highestScore = score;
+      if (kind === "win") bd.clears += 1; else bd.deaths += 1;
+    }
+    r.lastResult = payload;
+  }
+
   saveRecords(r);
   return r;
 }
@@ -682,6 +760,12 @@ const ACHIEVEMENTS = [
   { id: "mage_clear_standard",   name: "大魔導士の証", desc: "魔導士で標準以上の難易度をクリア" },
   { id: "class_growth_master",   name: "熟練の冒険者", desc: "1冒険でクラス成長を4回行った" },
   { id: "class_event_master",    name: "三職の道",     desc: "戦士・盗賊・魔導士の専用イベント全成功" },
+  // === 深層探索 ===
+  { id: "endless_start",  name: "深層への一歩",   desc: "深層探索でB21Fに到達" },
+  { id: "endless_30",     name: "果てなき探索者", desc: "深層探索でB30Fに到達" },
+  { id: "endless_50",     name: "深淵を覗く者",   desc: "深層探索でB50Fに到達" },
+  { id: "endless_100",    name: "無限の挑戦者",   desc: "深層探索でB100Fに到達" },
+  { id: "endless_boss_5", name: "残響を砕く者",   desc: "1冒険で深層ボスを5体撃破" },
 ];
 function loadAchievements() { return loadJSON(ACH_KEY, {}); }
 function saveAchievements(a) { saveJSON(ACH_KEY, a); }
@@ -748,6 +832,9 @@ function wipeAllStorage() {
 }
 function wipeSaveOnly() {
   removeKey(SAVE_KEY);
+  // 進行中セーブ削除時は記憶の商人の一時状態もクリア
+  // （欠片・永続強化・実績・冒険記録は維持）
+  wipeMemoryMerchant();
 }
 // 記憶の商人の一時状態だけリセット（出発時 / クリア時 / 死亡時）
 function wipeMemoryMerchant() {
@@ -764,8 +851,9 @@ function wipeMemoryMerchant() {
 
 // ---- ランタイム統計 ----
 let runStats = null;
-function newRunStats() {
+function newRunStats(mode = "story") {
   return {
+    mode: mode === "endless" ? "endless" : "story",
     kills: 0, maxDamage: 0, totalGoldGained: 0, lastDamageSource: "",
     // クラス特技の発動回数（旧セーブ互換のため normalizeRunStats で補完）
     warriorCounters: 0,
@@ -780,6 +868,8 @@ function newRunStats() {
     // 記憶の商人 関連（1冒険分のみ）
     memoryMerchantPurchases: [], // [{item, qty, cost}]
     merchantIntroAvailable: false, // 商人の紹介状: 次の通常商人で初購入10%引き
+    // 深層探索モード関連
+    depthBossKills: 0, // この冒険で撃破した深層ボス数
     // クラス別追加トラッカ
     pendingGrowth: [],                // 未消化のクラス成長選択 [3,5,...]
     classGrowthChoices: [],           // [{level, id}] 終了画面表示用
@@ -818,12 +908,18 @@ function normalizeRunStats(rs) {
   if (typeof out.classEventPity  !== "number") out.classEventPity  = 0;
   if (!Array.isArray(out.memoryMerchantPurchases)) out.memoryMerchantPurchases = [];
   if (typeof out.merchantIntroAvailable !== "boolean") out.merchantIntroAvailable = false;
+  if (typeof out.depthBossKills !== "number") out.depthBossKills = 0;
+  if (out.mode !== "story" && out.mode !== "endless") {
+    out.mode = (player && (player.mode === "story" || player.mode === "endless")) ? player.mode : "story";
+  }
   return out;
 }
-// player に classUpgrades を補完
+// player に classUpgrades / mode を補完
 function normalizePlayer(p) {
   if (!p || typeof p !== "object") return p;
   if (!p.classUpgrades || typeof p.classUpgrades !== "object") p.classUpgrades = {};
+  // 旧セーブで mode が無ければ "story"。本編20F煙玉バグで進めた状態でも story 扱い維持。
+  if (p.mode !== "story" && p.mode !== "endless") p.mode = "story";
   return p;
 }
 // 現在のクラス成長Lvを返す
@@ -880,11 +976,52 @@ function currentDifficulty() {
   return DIFFICULTIES[d] ? d : DEFAULT_DIFFICULTY;
 }
 function diffCfg() { return DIFFICULTIES[currentDifficulty()]; }
+
+// === 深層探索モード ===
+function isEndlessMode() { return player && player.mode === "endless"; }
+function isEndlessBossFloor(f) { return f > 20 && (f % 5) === 0; }
+function isBossBattleFloor(f) {
+  return isEndlessMode() ? isEndlessBossFloor(f) : BOSS_FLOORS.has(f);
+}
+// 深層ボスは既存4ボスをローテーション。階に応じて表示名を変える。
+const DEPTH_BOSS_ROTATION = ["スライム王", "ゴブリン将軍", "古龍", "魔王ザロス"];
+const DEPTH_BOSS_NAMES = {
+  "スライム王":   "深淵のスライム王",
+  "ゴブリン将軍": "亡霊ゴブリン将軍",
+  "古龍":         "腐敗した古龍",
+  "魔王ザロス":   "魔王の残響",
+};
+function depthBossKeyFor(floor) {
+  // 25→0, 30→1, 35→2, 40→3, 45→0,...
+  const i = Math.floor((floor - 25) / 5) % DEPTH_BOSS_ROTATION.length;
+  return DEPTH_BOSS_ROTATION[(i + DEPTH_BOSS_ROTATION.length) % DEPTH_BOSS_ROTATION.length];
+}
+function scaleMonsterForDepth(m, floor, mode) {
+  if (mode !== "endless" || floor <= 20) return m;
+  const depth = floor - 20;
+  m.hp  = Math.max(1, Math.floor(m.hp  * (1 + depth * 0.06)));
+  m.atk = Math.max(1, Math.floor(m.atk * (1 + depth * 0.04)));
+  m.defense += Math.floor(floor / 10);
+  m.exp  = Math.max(1, Math.floor(m.exp  * (1 + depth * 0.05)));
+  m.gold = Math.max(1, Math.floor(m.gold * (1 + depth * 0.05)));
+  return m;
+}
+function makeEndlessBoss(floor) {
+  const bossKey = depthBossKeyFor(floor);
+  const m = makeMonster(bossKey);
+  if (DEPTH_BOSS_NAMES[bossKey]) m.name = DEPTH_BOSS_NAMES[bossKey];
+  return m;
+}
+
 function makeMonster(name) {
   const m = JSON.parse(JSON.stringify(MONSTERS[name]));
   const d = diffCfg();
   m.hp  = Math.max(1, Math.floor(m.hp  * d.enemyHP));
   m.atk = Math.max(1, Math.floor(m.atk * d.enemyAtk));
+  // 深層モード時は階層に応じた追加スケール
+  if (player && player.mode === "endless") {
+    scaleMonsterForDepth(m, player.floor, "endless");
+  }
   return m;
 }
 
@@ -895,6 +1032,7 @@ function newPlayer(name, cls) {
   const c = CLASSES[cls];
   const p = {
     name, cls,
+    mode: "story",          // "story" | "endless"
     level: 1, exp: 0, floor: 1,
     hp: c.hp, max_hp: c.hp,
     base_atk: c.atk, base_def: c.defense,
@@ -1181,7 +1319,7 @@ function showAchievementToast(def) {
 // ====================================================================
 function removeOne(arr, x) { const i = arr.indexOf(x); if (i >= 0) arr.splice(i, 1); }
 
-function useItem(p, item, inCombat = false, target = null) {
+function useItem(p, item, inCombat = false, target = null, canFlee = true) {
   const info = ITEMS[item];
   if (info.category === "weapon") {
     const old = p.weapon; p.weapon = item; removeOne(p.inventory, item);
@@ -1214,6 +1352,8 @@ function useItem(p, item, inCombat = false, target = null) {
     case "buff_def": addEffect(p, "buff_def", 5, info.power); removeOne(p.inventory, item); return [true, "鉄壁の薬！ 5ターン防御力が上昇した。"];
     case "escape":
       if (!inCombat) return [false, "戦闘中にしか使えない。"];
+      // ボス戦・スフィンクス戦など canFlee=false ではそもそも使えない（誤タップで煙玉消費しない）
+      if (!canFlee) return [false, "この戦いからは逃げられない！ 煙玉は無効だ。"];
       removeOne(p.inventory, item);
       return [true, "煙玉を投げつけた！ 視界が遮られる。"];
     case "magic": {
@@ -1254,7 +1394,7 @@ function useItem(p, item, inCombat = false, target = null) {
   return [false, "何も起こらなかった。"];
 }
 
-async function openInventory(inCombat = false, target = null) {
+async function openInventory(inCombat = false, target = null, canFlee = true) {
   if (player.inventory.length === 0) {
     tell("所持品は空だ。", "dim");
     return null;
@@ -1269,13 +1409,15 @@ async function openInventory(inCombat = false, target = null) {
   const idx = await ask(opts);
   if (idx === opts.length - 1) return null;
   const item = items[idx];
-  const [consumed, msg] = useItem(player, item, inCombat, target);
+  const [consumed, msg] = useItem(player, item, inCombat, target, canFlee);
   tell(msg, consumed ? "shop" : "dim");
   renderStatus();
   // 戦闘中のアイテム使用は combat() の終了時に saveGame() するため
   // ここでは戦闘外のアイテム使用のみ保存する（戦闘ターン中保存は避ける）
   if (consumed && !inCombat) saveGame();
-  return consumed ? item : null;
+  // null は「キャンセル」、false は「選んだが使えなかった」。
+  // ボス戦の煙玉失敗などを無料ターンスキップにしないため区別する。
+  return consumed ? item : false;
 }
 
 // ====================================================================
@@ -1340,9 +1482,11 @@ async function combat(m, canFlee = true) {
       runStats.defendingTimes += 1;
       tell("構えを取った。", "shop");
     } else if (idx === 2) {
-      const consumed = await openInventory(true, m);
+      const consumed = await openInventory(true, m, canFlee);
       if (consumed === null) skipEnemy = true;
-      else if (consumed === "煙玉") { tell(`${m.name} を撒いて逃げ切った！`, "shop"); runStats.fleeSuccessCount += 1; saveGame(); return false; }
+      // 煙玉が成立するのは canFlee=true 時のみ。canFlee=false なら useItem が消費せず
+      // ガード済みなので、ここに "煙玉" の consumed が届かない（保険として canFlee 確認）
+      else if (consumed === "煙玉" && canFlee) { tell(`${m.name} を撒いて逃げ切った！`, "shop"); runStats.fleeSuccessCount += 1; saveGame(); return false; }
       else if (m.hp <= 0) break;
     } else if (idx === 3) {
       const isRogue = player.cls === "盗賊";
@@ -1384,11 +1528,11 @@ async function combat(m, canFlee = true) {
           }
         }
         // ボス戦は最低2ダメ保証（防御無双による作業化防止）
-        if (BOSS_FLOORS.has(player.floor)) edmg = Math.max(2, edmg);
+        if (isBossBattleFloor(player.floor)) edmg = Math.max(2, edmg);
       }
       // 戦士+聖なる鎧：ボス戦の初撃 -5
       if (player.cls === "戦士" && player.armor === "聖なる鎧"
-          && BOSS_FLOORS.has(player.floor) && turn === 1) {
+          && isBossBattleFloor(player.floor) && turn === 1) {
         edmg = Math.max(1, edmg - 5);
         runStats.equipmentSynergyTriggers += 1;
         tell("聖なる鎧が初撃の力を吸収した。", "shop");
@@ -1804,28 +1948,54 @@ const EVENTS_NORMAL = [
 function pickEvent() { return weightedChoice(EVENTS_NORMAL); }
 
 async function eventBoss() {
-  const m = makeMonster(bossFor(player.floor));
-  tellEvent(`☠ B${player.floor}F ボス：${m.name}`, `${m.flavor}\n\n──── これより先、逃げる事は叶わない。`, "boss");
+  const isEndless = isEndlessMode();
+  let bossKey;
+  let m;
+  if (isEndless && isEndlessBossFloor(player.floor)) {
+    bossKey = depthBossKeyFor(player.floor);
+    m = makeEndlessBoss(player.floor);
+  } else {
+    bossKey = bossFor(player.floor);
+    m = makeMonster(bossKey);
+  }
+  const headline = isEndless ? `☠ B${player.floor}F 深層ボス：${m.name}` : `☠ B${player.floor}F ボス：${m.name}`;
+  tellEvent(headline, `${m.flavor}\n\n──── これより先、逃げる事は叶わない。`, "boss");
   await pause("戦闘開始");
   const won = await combat(m, false);
-  if (won) addShardsToRun(`${m.name}撃破`, 2);
-  if (won && player.floor === FINAL_FLOOR) await ending();
+  if (won) {
+    addShardsToRun(`${m.name}撃破`, 2);
+    if (isEndless) {
+      runStats.depthBossKills = (runStats.depthBossKills || 0) + 1;
+      if (runStats.depthBossKills >= 5) unlockAch("endless_boss_5");
+    }
+  }
+  // GAME CLEARは本編20F限定。深層モードでは絶対に発火しない。
+  if (won && player.floor === FINAL_FLOOR && !isEndless) await ending();
 }
 
 // 階層到達系の実績をチェック
 function checkFloorAchievements() {
   const f = player.floor;
-  if (f >= 2)  unlockAch("first_step");
-  if (f >= 5)  unlockAch("explorer");
-  if (f >= 10) unlockAch("venturer");
-  if (f >= 15) unlockAch("hero_candidate");
-  // クラス別到達実績
-  if (f >= 10 && player.cls === "戦士" &&
-      (runStats.defendingTimes + runStats.warriorCounters) >= 10) {
-    unlockAch("warrior_guardian");
-  }
-  if (f >= 10 && player.cls === "盗賊" && runStats.fleeSuccessCount >= 5) {
-    unlockAch("rogue_survivor");
+  const endless = player.mode === "endless";
+  if (!endless) {
+    if (f >= 2)  unlockAch("first_step");
+    if (f >= 5)  unlockAch("explorer");
+    if (f >= 10) unlockAch("venturer");
+    if (f >= 15) unlockAch("hero_candidate");
+    // クラス別到達実績
+    if (f >= 10 && player.cls === "戦士" &&
+        (runStats.defendingTimes + runStats.warriorCounters) >= 10) {
+      unlockAch("warrior_guardian");
+    }
+    if (f >= 10 && player.cls === "盗賊" && runStats.fleeSuccessCount >= 5) {
+      unlockAch("rogue_survivor");
+    }
+  } else {
+    // 深層探索の階層到達実績（深層モード時のみ）
+    if (f >= 21)  unlockAch("endless_start");
+    if (f >= 30)  unlockAch("endless_30");
+    if (f >= 50)  unlockAch("endless_50");
+    if (f >= 100) unlockAch("endless_100");
   }
 }
 
@@ -1871,8 +2041,7 @@ async function processGrowthQueue() {
 // 記憶の商人
 // ====================================================================
 function generateMemoryMerchantStock() {
-  const records = loadRecords();
-  const hasCleared = (records.clears || 0) > 0;
+  const hasCleared = hasClearedStory();
   const isChallenge = player && player.difficulty === "challenge";
   const allowRare = hasCleared || isChallenge;
   const allowSage = hasCleared;
@@ -1954,6 +2123,7 @@ async function showMemoryMerchant() {
       runStats.memoryMerchantPurchases.push({ item: p.item, qty: p.qty || 1, cost: p.cost });
     }
     tell(`(前回ここで選んだ品を引き継いだ：${mm.purchasedItems.map(p => p.item).join(", ")})`, "dim");
+    saveGame();
   }
 
   tellEvent("📦 記憶の商人", "「次の冒険の支度はどうするね？ 記憶の欠片で売ってやるよ。」", "shop");
@@ -1990,6 +2160,7 @@ async function showMemoryMerchant() {
     if (idx === opts.length - 1) {
       // 出発：商人の状態をクリーンアップ
       wipeMemoryMerchant();
+      saveGame();
       tell("「達者でな」", "shop");
       break;
     } else if (idx === opts.length - 2) {
@@ -2012,6 +2183,7 @@ async function showMemoryMerchant() {
       saveMeta(meta);
       applyMemoryMerchantPurchase(it);
       runStats.memoryMerchantPurchases.push({ item: it.item, qty: it.qty || 1, cost: it.cost });
+      saveGame();
       const qtyTag = (it.qty && it.qty > 1) ? `×${it.qty}` : "";
       tell(`✦ ${it.item}${qtyTag} を ${it.cost}欠片で購入した。`, "gold");
       if (mm.purchasedCount >= 2) {
@@ -2028,6 +2200,12 @@ function determineTitle() {
   if (!runStats || !player) return "";
   const cls = player.cls;
   const cs = runStats;
+  // 深層モード時は深層専用称号を優先
+  if (player.mode === "endless") {
+    if (player.floor >= 100) return "果てなき者";
+    if ((cs.depthBossKills || 0) >= 5) return "残響砕き";
+    if (player.floor >= 30) return "深層帰り";
+  }
   if (cls === "戦士") {
     if (cs.warriorCounters >= 8) return "反撃の戦士";
     if (cs.defendingTimes  >= 12) return "鉄壁の戦士";
@@ -2207,16 +2385,25 @@ async function titleScreen() {
     }
 
     const save = loadSave();
+    const hasCleared = hasClearedStory();
+
     const opts = [{ label: "はじめから", desc: save ? "現在のセーブは破棄される" : "新しい冒険を始める" }];
     if (save) {
       const p = save.player;
       const dl = (p.difficulty && DIFFICULTIES[p.difficulty]) ? DIFFICULTIES[p.difficulty].label : "挑戦";
+      const modeTag = (p.mode === "endless") ? "深層" : "本編";
       opts.push({
         label: "続きから",
-        desc: `${p.name}(${p.cls}/${dl}) Lv${p.level} B${p.floor}F  保存 ${fmtDate(save.savedAt)}`,
+        desc: `[${modeTag}] ${p.name}(${p.cls}/${dl}) Lv${p.level} B${p.floor}F  保存 ${fmtDate(save.savedAt)}`,
       });
     } else {
       opts.push({ label: "続きから", desc: "セーブデータなし", disabled: true });
+    }
+    // 深層探索：本編クリア後に解放
+    if (hasCleared) {
+      opts.push({ label: "🌑 深層探索", desc: "B21Fから果てなき深層へ。死亡まで続く。" });
+    } else {
+      opts.push({ label: "🔒 深層探索", desc: "本編を1度クリアすると解放", disabled: true });
     }
     opts.push({ label: "冒険記録",   desc: "実績・最高記録を見る" });
     opts.push({ label: "記憶の強化", desc: `欠片で永続強化（所持 ${meta.shards}）` });
@@ -2230,24 +2417,40 @@ async function titleScreen() {
         const c = await ask([{ label: "破棄して開始" }, { label: "やめる" }]);
         if (c !== 0) continue;
       }
-      const ok = await startNewGame();
+      const ok = await startNewGame("story");
       if (ok) return "new";
     } else if (idx === 1) {
       const ok = await resumeGame();
       if (ok) return "resume";
     } else if (idx === 2) {
-      await showRecords();
+      // 深層探索（未解放時はdisabledなのでここに来ないが、二重チェック）
+      if (!hasCleared) continue;
+      if (save) {
+        clearNarrative();
+        tellEvent("⚠ 上書き確認", "現在のセーブを破棄して深層探索を始める。良いか？", "danger");
+        const c = await ask([{ label: "破棄して開始" }, { label: "やめる" }]);
+        if (c !== 0) continue;
+      }
+      const ok = await startNewGame("endless");
+      if (ok) return "new";
     } else if (idx === 3) {
-      await showUpgradeShop();
+      await showRecords();
     } else if (idx === 4) {
+      await showUpgradeShop();
+    } else if (idx === 5) {
       await deleteMenu();
     }
   }
 }
 
-async function startNewGame() {
+async function startNewGame(mode = "story") {
   clearSave();
+  // 新規開始時は念のため記憶の商人の一時状態もクリア（前回の出発で消し漏れ対策）
+  wipeMemoryMerchant();
   clearNarrative();
+  if (mode === "endless") {
+    tellEvent("深層探索", "魔王の残響が呼んでいる。光無き深層へ。", "boss");
+  }
   tellTitle("主人公の名前を入力");
   const name = (await askText("冒険者")).trim() || "冒険者";
   tellTitle("クラス選択");
@@ -2271,9 +2474,13 @@ async function startNewGame() {
 
   player = newPlayer(name, cls);
   player.difficulty = difficulty;
-  runStats = newRunStats();
+  player.mode = mode;
+  if (mode === "endless") player.floor = 21;
+  runStats = newRunStats(mode);
   // 強化適用
   applyUpgrades(player);
+  // 商人画面中のリロードでも購入済み装備・アイテムを復元できるように先に保存する。
+  saveGame();
 
   // 適用結果を簡潔に通知
   const meta = loadMeta();
@@ -2285,13 +2492,16 @@ async function startNewGame() {
   if (u.amulet)   upMsgs.push("旅の護符：1冒険1回、致命傷をHP1で耐える");
 
   clearNarrative();
-  tellEvent("冒険の始まり", `${name}（${cls}）は ${DIFFICULTIES[difficulty].label} の迷宮へ向かった。`);
+  const intro = (mode === "endless")
+    ? `${name}（${cls}）は B21F の深層から這い上がるべく踏み出した。`
+    : `${name}（${cls}）は ${DIFFICULTIES[difficulty].label} の迷宮へ向かった。`;
+  tellEvent("冒険の始まり", intro);
   if (upMsgs.length) tell("✦ 記憶の強化が発動: " + upMsgs.join(" / "), "shop");
 
-  // 記憶の商人（欠片で開始準備を整える機会）
+  // 記憶の商人（欠片で開始準備を整える機会）— 深層探索でも使える
   await showMemoryMerchant();
 
-  await pause("迷宮に入る");
+  await pause(mode === "endless" ? "深層へ降りる" : "迷宮に入る");
   return true;
 }
 
@@ -2306,6 +2516,7 @@ async function resumeGame() {
     player   = data.player;
     normalizePlayer(player);
     runStats = normalizeRunStats(data.runStats);
+    runStats.mode = player.mode;
     if (typeof player.hp !== "number" || player.hp <= 0) throw new Error("invalid save");
     // 旧セーブ互換：difficultyが無い／未知の値ならchallenge扱い（既存プレイ感維持）
     if (!player.difficulty || !DIFFICULTIES[player.difficulty]) player.difficulty = DEFAULT_DIFFICULTY;
@@ -2318,6 +2529,8 @@ async function resumeGame() {
     if (f >= 15 && runStats.shardMarks[15] === undefined) runStats.shardMarks[15] = true;
     // normalize後の補完済みデータを保存して、次回読込でも整合を保つ
     saveGame();
+    // 進行中セーブからの再開では記憶の商人を再表示しないため、一時状態を片付ける。
+    wipeMemoryMerchant();
     clearNarrative();
     const dl = DIFFICULTIES[player.difficulty].label;
     tellEvent("冒険の再開", `${player.name}（${player.cls}/${dl}）は B${player.floor}F で目を覚ました。`);
@@ -2326,6 +2539,7 @@ async function resumeGame() {
   } catch (e) {
     console.warn("resume failed", e);
     clearSave();
+    wipeMemoryMerchant();
     tell("セーブデータが破損していたため初期化した。", "danger");
     await pause("戻る");
     return false;
@@ -2362,6 +2576,17 @@ async function showRecords() {
       <tr><td>挑戦</td><td>最高 ${r.byDiff.challenge.highestFloor}F / クリア ${r.byDiff.challenge.clears}回</td></tr>
     </table>
 
+    <h3>🌑 深層探索</h3>
+    <table>
+      <tr><td>最高到達階</td><td>${r.endlessBestFloor || 0}F</td></tr>
+      <tr><td>最高スコア</td><td>${r.endlessBestScore || 0}</td></tr>
+      <tr><td>最大撃破数</td><td>${r.endlessBestKills || 0}体</td></tr>
+      <tr><td>最大深層ボス撃破</td><td>${r.endlessBestBossKills || 0}体</td></tr>
+      <tr><td>挑戦 / 死亡</td><td>${r.endlessRuns || 0}回 / ${r.endlessDeaths || 0}回</td></tr>
+      <tr><td>クラス最高</td><td>戦士 ${r.endlessBestByClass["戦士"] || 0}F / 盗賊 ${r.endlessBestByClass["盗賊"] || 0}F / 魔導士 ${r.endlessBestByClass["魔導士"] || 0}F</td></tr>
+      <tr><td>難易度最高</td><td>物語 ${r.endlessBestByDifficulty.story.highestFloor || 0}F / 標準 ${r.endlessBestByDifficulty.normal.highestFloor || 0}F / 挑戦 ${r.endlessBestByDifficulty.challenge.highestFloor || 0}F</td></tr>
+    </table>
+
     <h3>💎 記憶の強化</h3>
     <table>
       <tr><td>所持欠片</td><td>${meta.shards}</td></tr>
@@ -2394,6 +2619,24 @@ async function showRecords() {
         <tr><td>スコア</td><td class="score">${lr.score}</td></tr>
       </table>`;
   }
+  if (r.endlessLastResult) {
+    const er = r.endlessLastResult;
+    const dl  = (er.difficulty && DIFFICULTIES[er.difficulty]) ? DIFFICULTIES[er.difficulty].label : "—";
+    const titleRow = er.title ? `<tr><td>称号</td><td>${escapeHtml(er.title)}</td></tr>` : "";
+    const growthRow = er.growthSummary ? `<tr><td>成長</td><td>${escapeHtml(er.growthSummary)}</td></tr>` : "";
+    html += `<h3>直近の深層探索</h3>
+      <table>
+        <tr><td>結果</td><td>${dl} / B${er.floor}F / Lv${er.level}</td></tr>
+        <tr><td>探索者</td><td>${escapeHtml(er.name)} (${er.cls})</td></tr>
+        <tr><td>撃破 / 深層ボス</td><td>${er.kills}体 / ${er.depthBossKills || 0}体</td></tr>
+        <tr><td>最大ダメージ</td><td>${er.maxDamage}</td></tr>
+        ${titleRow}
+        ${growthRow}
+        <tr><td>獲得欠片</td><td>${er.earnedShards || 0} 個</td></tr>
+        <tr><td>終端</td><td>${escapeHtml(er.reason || "—")}</td></tr>
+        <tr><td>スコア</td><td class="score">${er.score}</td></tr>
+      </table>`;
+  }
   html += `<h3>🏆 実績 ${unlockedCount} / ${ACHIEVEMENTS.length}</h3><table>`;
   for (const def of ACHIEVEMENTS) {
     const got = !!a[def.id];
@@ -2418,7 +2661,7 @@ async function deleteMenu() {
   clearNarrative();
   tellEvent("削除メニュー", "削除する範囲を選んでください。\n冒険記録・実績・記憶の強化は通常のプレイで蓄積されるデータです。");
   const idx = await ask([
-    { label: "進行中セーブだけ削除", desc: "次の冒険から開始（記録・実績・強化は維持）" },
+    { label: "進行中セーブだけ削除", desc: "セーブと商人途中状態を削除（記録・実績・強化・欠片は維持）" },
     { label: "全記録削除",           desc: "セーブ・冒険記録・実績・記憶の強化を全削除" },
     { label: "戻る" },
   ]);
@@ -2489,11 +2732,20 @@ function computeScore(kind) {
 
 function buildEndCard(kind, reason) {
   const score = computeScore(kind);
+  const isEndless = isEndlessMode();
   const titleClass = kind === "win" ? "" : "dead";
-  const titleText  = kind === "win" ? "✦ GAME CLEAR ✦" : "☠ YOU DIED ☠";
-  const tagline    = kind === "win"
-    ? "魔王ザロスは塵となって消えた。<br>地上に光が戻り、勇者の伝説が始まる──"
-    : "迷宮はまた一つ、骸を増やした…";
+  let titleText, tagline;
+  if (isEndless) {
+    // 深層探索は基本「死亡」のみ
+    titleText = "✦ 深層探索 終了 ✦";
+    tagline   = "深層の闇に飲み込まれた…<br>だが記憶の欠片は持ち帰れる。";
+  } else if (kind === "win") {
+    titleText = "✦ GAME CLEAR ✦";
+    tagline   = "魔王ザロスは塵となって消えた。<br>地上に光が戻り、勇者の伝説が始まる──";
+  } else {
+    titleText = "☠ YOU DIED ☠";
+    tagline   = "迷宮はまた一つ、骸を増やした…";
+  }
   const a = loadAchievements();
   const newlyEarned = (window.__newAchIds || []).map(id => ACHIEVEMENTS.find(x => x.id === id)).filter(Boolean);
   const badges = newlyEarned.length
@@ -2555,6 +2807,11 @@ function buildEndCard(kind, reason) {
   const meta = loadMeta();
   const hasUpgrades = Object.values(meta.upgrades).some(v => v > 0);
   const upgradeTag = hasUpgrades ? `<span class="badge">✦ 記憶の強化あり</span>` : "";
+  const modeTag = isEndless ? `<span class="badge">🌑 深層探索</span>` : "";
+  // 深層モード専用の追加行
+  const depthRow = isEndless
+    ? `<tr><td>深層ボス撃破</td><td>${runStats.depthBossKills || 0} 体</td></tr>`
+    : "";
 
   // 獲得欠片の内訳
   const earned = runStats.earnedShards || 0;
@@ -2569,6 +2826,7 @@ function buildEndCard(kind, reason) {
     <div class="reason">${escapeHtml(reason)}</div>
     <div class="badge-list" style="margin-bottom:8px;">
       <span class="badge">難易度: ${dLabel}</span>
+      ${modeTag}
       ${upgradeTag}
     </div>
     <table>
@@ -2578,6 +2836,7 @@ function buildEndCard(kind, reason) {
       <tr><td>装備</td><td>${player.weapon || "—"} / ${player.armor || "—"}</td></tr>
       <tr><td>所持金</td><td>${player.gold}G</td></tr>
       <tr><td>撃破数</td><td>${runStats.kills}体</td></tr>
+      ${depthRow}
       <tr><td>最大ダメージ</td><td>${runStats.maxDamage}</td></tr>
       <tr><td>累計獲得G</td><td>${runStats.totalGoldGained}G</td></tr>
       <tr><td>総合スコア</td><td class="score">${score}</td></tr>
@@ -2682,7 +2941,11 @@ async function gameLoop() {
       checkFloorAchievements();
       renderStatus();
 
-      if (BOSS_FLOORS.has(player.floor)) {
+      // ボス階判定：本編は BOSS_FLOORS、深層は floor>20 かつ 5の倍数
+      const bossFloor = isEndlessMode()
+        ? isEndlessBossFloor(player.floor)
+        : BOSS_FLOORS.has(player.floor);
+      if (bossFloor) {
         await eventBoss();
       } else {
         // クラス専用イベント抽選：基礎7%、5階連続未発生で次階は25%（天井方式）
