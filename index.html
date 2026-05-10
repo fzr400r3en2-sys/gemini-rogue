@@ -103,6 +103,13 @@ body {
   color: var(--magenta);
   margin-top: 2px;
 }
+.mini-goal {
+  grid-column: span 4;
+  font-size: 11px;
+  color: var(--cyan);
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
 .floor-tag {
   background: var(--accent);
   color: #2a1a00;
@@ -238,6 +245,7 @@ input.text-input:focus { border-color: var(--accent); }
   margin-bottom: 4px;
 }
 .title-sub { color: var(--dim); font-size: 13px; }
+.version-tag { color: var(--dim); font-size: 11px; margin-top: 4px; opacity: 0.8; }
 
 /* === 終了画面・記録カード === */
 .endcard {
@@ -386,6 +394,11 @@ input.text-input:focus { border-color: var(--accent); }
 // ====================================================================
 const FINAL_FLOOR = 20;
 const BOSS_FLOORS = new Set([5, 10, 15, 20]);
+const APP_VERSION = "v20260510-rogue-plus";
+
+const FORGE_COSTS = [0, 60, 100, 160, 240, 340];
+const STORY_FORGE_LIMIT = 3;
+const ENDLESS_FORGE_LIMIT = 5;
 
 const ITEMS = {
   "ポーション":     { category: "consumable", effect: "heal",      power: 25, price:  30, desc: "HPを25回復" },
@@ -533,6 +546,41 @@ const EVENT_FLAVOR = {
   trap:     ["床に違和感がある。", "壁の小穴が並んでいる。", "嫌な予感がする。"],
 };
 
+const MINI_GOALS = {
+  "戦士": [
+    { id: "warrior_defend_5", text: "防御を5回行う", stat: "warriorDefends", target: 5 },
+    { id: "warrior_counter_3", text: "反撃を3回発動する", stat: "warriorCounters", target: 3 },
+    { id: "warrior_boss_2", text: "ボスを2体撃破する", stat: "warriorBossKills", target: 2 },
+  ],
+  "盗賊": [
+    { id: "rogue_trap_2", text: "罠を2回回避する", stat: "rogueTrapAvoids", target: 2 },
+    { id: "rogue_escape_3", text: "逃走を3回成功させる", stat: "rogueEscapes", target: 3 },
+    { id: "rogue_chest_3", text: "宝箱を3回開ける", stat: "treasureOpens", target: 3 },
+  ],
+  "魔導士": [
+    { id: "mage_scroll_3", text: "巻物を3回使う", stat: "scrollUseCount", target: 3 },
+    { id: "mage_riddle_1", text: "謎かけに成功する", stat: "riddleSuccesses", target: 1 },
+    { id: "mage_insight_3", text: "叡智を3回活かす", stat: "mageEventInsights", target: 3 },
+  ],
+};
+const MINI_GOAL_REWARDS = [
+  () => ({ type: "gold", amount: randInt(30, 50), label: "GOLD" }),
+  () => ({ type: "item", item: "ポーション", label: "ポーション" }),
+  () => ({ type: "item", item: "煙玉", label: "煙玉" }),
+  () => ({ type: "item", item: "魔法の巻物", label: "巻物" }),
+];
+
+const BLESSINGS = [
+  { id: "sword", name: "剣の記憶", desc: "攻撃 +1", weight: 10 },
+  { id: "shield", name: "盾の記憶", desc: "防御 +1", weight: 10 },
+  { id: "life", name: "生命の記憶", desc: "最大HP +5 / HP +5", weight: 10, endlessWeight: 14 },
+  { id: "merchant", name: "商人の記憶", desc: "GOLD +50", weight: 8 },
+  { id: "apothecary", name: "薬師の記憶", desc: "ポーション +1", weight: 8, endlessWeight: 12 },
+  { id: "escape", name: "逃走の記憶", desc: "煙玉 +1", weight: 7 },
+  { id: "wisdom", name: "知恵の記憶", desc: "巻物 +1", weight: 8, endlessWeight: 12 },
+  { id: "forge", name: "鍛冶の記憶", desc: "武器か防具を +1", weight: 7, endlessWeight: 12 },
+];
+
 // ====================================================================
 // 永続ストレージ層
 // ====================================================================
@@ -667,6 +715,7 @@ function recordRunResult(kind, score, reason) {
   // 強化フラグ
   const meta = loadMeta();
   const hasUpgrades = Object.values(meta.upgrades).some(v => v > 0);
+  const mmSpent = runStats ? (runStats.memoryMerchantPurchases || []).reduce((s, p) => s + (p.cost || 0), 0) : 0;
 
   // 共通の lastResult ペイロード
   const payload = {
@@ -680,9 +729,25 @@ function recordRunResult(kind, score, reason) {
     title:     runStats ? (runStats.title || "")   : "",
     depthBossKills: runStats ? (runStats.depthBossKills || 0) : 0,
     classEventSuccess: runStats ? (runStats.classEventSuccess || {warrior:0,rogue:0,mage:0}) : {warrior:0,rogue:0,mage:0},
+    classActivity: classActivityRows(),
+    classFeatureTriggers: runStats ? (runStats.classFeatureTriggers || 0) : 0,
     growthSummary: (player.classUpgrades && Object.keys(player.classUpgrades).length > 0)
       ? Object.entries(player.classUpgrades).map(([k,v]) => `${k} Lv${v}`).join(" / ") : "",
     memoryMerchantPurchases: runStats ? (runStats.memoryMerchantPurchases || []) : [],
+    memoryMerchantSpent: mmSpent,
+    blessingChoices: runStats ? (runStats.blessingChoices || []) : [],
+    blessingCount: runStats ? (runStats.blessingCount || 0) : 0,
+    forgeWeaponCount: runStats ? (runStats.forgeWeaponCount || 0) : 0,
+    forgeArmorCount: runStats ? (runStats.forgeArmorCount || 0) : 0,
+    forgeGoldSpent: runStats ? (runStats.forgeGoldSpent || 0) : 0,
+    maxWeaponEnhance: runStats ? (runStats.maxWeaponEnhance || 0) : 0,
+    maxArmorEnhance: runStats ? (runStats.maxArmorEnhance || 0) : 0,
+    weaponEnhance: player.weaponEnhance || 0,
+    armorEnhance: player.armorEnhance || 0,
+    miniGoal: snapshotMiniGoal(),
+    evaluation: determineRunEvaluation(kind),
+    replay: buildReplayLine(),
+    deathHint: buildDeathHint(kind),
     hasUpgrades,
     weapon: player.weapon, armor: player.armor,
     date: Date.now(),
@@ -856,9 +921,17 @@ function newRunStats(mode = "story") {
     mode: mode === "endless" ? "endless" : "story",
     kills: 0, maxDamage: 0, totalGoldGained: 0, lastDamageSource: "",
     // クラス特技の発動回数（旧セーブ互換のため normalizeRunStats で補完）
+    classFeatureTriggers: 0,
     warriorCounters: 0,
+    warriorDefends: 0,
+    warriorBossKills: 0,
     rogueTrapAvoids: 0,
+    rogueEscapes: 0,
+    rogueGoodLoots: 0,
+    rogueDiscounts: 0,
+    mageScrollBoosts: 0,
     mageScrollSaves: 0,
+    mageEventInsights: 0,
     // メタプログレッション関連（今回の冒険で稼いだ欠片）
     earnedShards: 0,
     shardLog: [],          // [{reason, amount}]
@@ -870,6 +943,20 @@ function newRunStats(mode = "story") {
     merchantIntroAvailable: false, // 商人の紹介状: 次の通常商人で初購入10%引き
     // 深層探索モード関連
     depthBossKills: 0, // この冒険で撃破した深層ボス数
+    // ビルド・鍛冶・祝福
+    blessingChoices: [],
+    blessingCount: 0,
+    forgeWeaponCount: 0,
+    forgeArmorCount: 0,
+    forgeGoldSpent: 0,
+    maxWeaponEnhance: 0,
+    maxArmorEnhance: 0,
+    // 冒険中の小目標
+    miniGoal: null,
+    miniGoalCompleted: false,
+    miniGoalRewarded: false,
+    treasureOpens: 0,
+    riddleSuccesses: 0,
     // クラス別追加トラッカ
     pendingGrowth: [],                // 未消化のクラス成長選択 [3,5,...]
     classGrowthChoices: [],           // [{level, id}] 終了画面表示用
@@ -909,6 +996,27 @@ function normalizeRunStats(rs) {
   if (!Array.isArray(out.memoryMerchantPurchases)) out.memoryMerchantPurchases = [];
   if (typeof out.merchantIntroAvailable !== "boolean") out.merchantIntroAvailable = false;
   if (typeof out.depthBossKills !== "number") out.depthBossKills = 0;
+  [
+    "classFeatureTriggers",
+    "warriorCounters", "warriorDefends", "warriorBossKills",
+    "rogueTrapAvoids", "rogueEscapes", "rogueGoodLoots", "rogueDiscounts",
+    "mageScrollBoosts", "mageScrollSaves", "mageEventInsights",
+    "blessingCount", "forgeWeaponCount", "forgeArmorCount", "forgeGoldSpent",
+    "maxWeaponEnhance", "maxArmorEnhance", "treasureOpens", "riddleSuccesses",
+  ].forEach(k => { if (typeof out[k] !== "number") out[k] = 0; });
+  if (!Array.isArray(out.blessingChoices)) out.blessingChoices = [];
+  if (!out.miniGoal || typeof out.miniGoal !== "object") out.miniGoal = null;
+  if (typeof out.miniGoalCompleted !== "boolean") out.miniGoalCompleted = !!(out.miniGoal && out.miniGoal.completed);
+  if (typeof out.miniGoalRewarded !== "boolean") out.miniGoalRewarded = !!(out.miniGoal && out.miniGoal.rewarded);
+  if (player && player.cls === "戦士" && rs.warriorDefends === undefined) out.warriorDefends = out.defendingTimes || 0;
+  if (player && player.cls === "盗賊" && rs.rogueEscapes === undefined) out.rogueEscapes = out.fleeSuccessCount || 0;
+  if (player && player.cls === "魔導士" && rs.mageScrollBoosts === undefined) out.mageScrollBoosts = out.scrollUseCount || 0;
+  if (rs.classFeatureTriggers === undefined) {
+    out.classFeatureTriggers =
+      (out.warriorCounters || 0) + (out.warriorDefends || 0) + (out.warriorBossKills || 0) +
+      (out.rogueTrapAvoids || 0) + (out.rogueEscapes || 0) + (out.rogueGoodLoots || 0) + (out.rogueDiscounts || 0) +
+      (out.mageScrollBoosts || 0) + (out.mageScrollSaves || 0) + (out.mageEventInsights || 0);
+  }
   if (out.mode !== "story" && out.mode !== "endless") {
     out.mode = (player && (player.mode === "story" || player.mode === "endless")) ? player.mode : "story";
   }
@@ -918,8 +1026,17 @@ function normalizeRunStats(rs) {
 function normalizePlayer(p) {
   if (!p || typeof p !== "object") return p;
   if (!p.classUpgrades || typeof p.classUpgrades !== "object") p.classUpgrades = {};
+  if (!Array.isArray(p.inventory)) p.inventory = [];
+  p.inventory = p.inventory.filter(it => typeof it === "string" && ITEMS[it]);
+  if (p.weapon && (!ITEMS[p.weapon] || ITEMS[p.weapon].category !== "weapon")) p.weapon = null;
+  if (p.armor && (!ITEMS[p.armor] || ITEMS[p.armor].category !== "armor")) p.armor = null;
   // 旧セーブで mode が無ければ "story"。本編20F煙玉バグで進めた状態でも story 扱い維持。
   if (p.mode !== "story" && p.mode !== "endless") p.mode = "story";
+  if (typeof p.weaponEnhance !== "number" || p.weaponEnhance < 0) p.weaponEnhance = 0;
+  if (typeof p.armorEnhance !== "number" || p.armorEnhance < 0) p.armorEnhance = 0;
+  const lim = p.mode === "endless" ? ENDLESS_FORGE_LIMIT : STORY_FORGE_LIMIT;
+  p.weaponEnhance = Math.min(lim, Math.floor(p.weaponEnhance));
+  p.armorEnhance = Math.min(lim, Math.floor(p.armorEnhance));
   return p;
 }
 // 現在のクラス成長Lvを返す
@@ -1039,6 +1156,7 @@ function newPlayer(name, cls) {
     gold: c.gold,
     inventory: [...c.start],
     weapon: null, armor: null,
+    weaponEnhance: 0, armorEnhance: 0,
     effects: [],
     classUpgrades: {},      // {鉄壁:N, 反撃術:N, ...} 取得済みLv
   };
@@ -1053,12 +1171,12 @@ function newPlayer(name, cls) {
   return p;
 }
 function pAtk(p) {
-  let a = p.base_atk + (p.weapon ? ITEMS[p.weapon].atk : 0);
+  let a = p.base_atk + (p.weapon && ITEMS[p.weapon] ? ITEMS[p.weapon].atk : 0) + (p.weaponEnhance || 0);
   for (const e of p.effects) if (e.name === "buff_atk") a += e.power;
   return a;
 }
 function pDef(p) {
-  let d = p.base_def + (p.armor ? ITEMS[p.armor].defense : 0);
+  let d = p.base_def + (p.armor && ITEMS[p.armor] ? ITEMS[p.armor].defense : 0) + (p.armorEnhance || 0);
   for (const e of p.effects) if (e.name === "buff_def") d += e.power;
   return d;
 }
@@ -1168,6 +1286,123 @@ function sellPrice(item) {
   if (player && player.cls === "盗賊") return Math.floor(base * ROGUE_SELL_RATE);
   return base;
 }
+function equipLabel(slot) {
+  if (!player) return "なし";
+  const name = slot === "weapon" ? player.weapon : player.armor;
+  if (!name) return "なし";
+  const plus = slot === "weapon" ? (player.weaponEnhance || 0) : (player.armorEnhance || 0);
+  return `${name}${plus > 0 ? ` +${plus}` : ""}`;
+}
+function itemPlusLabel(name, plus = 0) {
+  return name ? `${name}${plus > 0 ? ` +${plus}` : ""}` : "—";
+}
+function runStatValue(stat) {
+  if (!runStats || typeof runStats[stat] !== "number") return 0;
+  return runStats[stat];
+}
+function addRunStat(stat, amount = 1, check = true) {
+  if (!runStats || !stat || amount === 0) return;
+  if (typeof runStats[stat] !== "number") runStats[stat] = 0;
+  runStats[stat] += amount;
+  if (check) checkMiniGoalProgress();
+}
+function addClassFeatureStat(stat, amount = 1) {
+  if (!runStats) return;
+  addRunStat(stat, amount, false);
+  addRunStat("classFeatureTriggers", amount, false);
+  checkMiniGoalProgress();
+}
+function assignMiniGoal() {
+  if (!player || !runStats) return;
+  const goals = MINI_GOALS[player.cls] || [];
+  if (!goals.length) return;
+  const base = choice(goals);
+  const reward = choice(MINI_GOAL_REWARDS)();
+  runStats.miniGoal = { ...base, reward, completed: false, rewarded: false };
+  runStats.miniGoalCompleted = false;
+  runStats.miniGoalRewarded = false;
+}
+function miniGoalProgress(goal = runStats && runStats.miniGoal) {
+  if (!goal) return 0;
+  return Math.min(goal.target || 0, runStatValue(goal.stat));
+}
+function miniGoalText() {
+  const goal = runStats && runStats.miniGoal;
+  if (!goal) return "";
+  const done = runStats.miniGoalCompleted || goal.completed;
+  return done
+    ? `ミニ目標: ${goal.text} 達成済み`
+    : `ミニ目標: ${goal.text} ${miniGoalProgress(goal)}/${goal.target}`;
+}
+function miniGoalRewardText(goal) {
+  const r = goal && goal.reward;
+  if (!r) return "";
+  if (r.type === "gold") return `${r.amount}G`;
+  if (r.type === "item") return r.item;
+  return r.label || "";
+}
+function grantMiniGoalReward(goal) {
+  if (!goal || !goal.reward || !player) return;
+  const r = goal.reward;
+  if (r.type === "gold") addGold(player, r.amount || 0);
+  else if (r.type === "item" && ITEMS[r.item]) player.inventory.push(r.item);
+}
+function checkMiniGoalProgress() {
+  if (!runStats || !runStats.miniGoal || runStats.miniGoalRewarded) return;
+  const goal = runStats.miniGoal;
+  if (miniGoalProgress(goal) < goal.target) return;
+  goal.completed = true;
+  goal.rewarded = true;
+  runStats.miniGoalCompleted = true;
+  runStats.miniGoalRewarded = true;
+  grantMiniGoalReward(goal);
+  tell(`ミニ目標達成！ ${miniGoalRewardText(goal)} を得た。`, "gold");
+}
+function forgeLimit() {
+  return isEndlessMode() ? ENDLESS_FORGE_LIMIT : STORY_FORGE_LIMIT;
+}
+function getEnhance(slot) {
+  return slot === "weapon" ? (player.weaponEnhance || 0) : (player.armorEnhance || 0);
+}
+function setEnhance(slot, value) {
+  if (slot === "weapon") player.weaponEnhance = value;
+  else player.armorEnhance = value;
+}
+function hasForgeTarget(slot) {
+  const name = slot === "weapon" ? player.weapon : player.armor;
+  const info = name ? ITEMS[name] : null;
+  return !!(info && info.category === slot);
+}
+function forgeCost(slot, discount = 1) {
+  const next = getEnhance(slot) + 1;
+  return Math.max(1, Math.floor((FORGE_COSTS[next] || 9999) * discount));
+}
+function canEnhance(slot, discount = 1, free = false) {
+  if (!player || !hasForgeTarget(slot)) return false;
+  if (getEnhance(slot) >= forgeLimit()) return false;
+  return free || player.gold >= forgeCost(slot, discount);
+}
+function enhanceEquipment(slot, opts = {}) {
+  const free = !!opts.free;
+  const discount = typeof opts.discount === "number" ? opts.discount : 1;
+  const source = opts.source || "forge";
+  if (!canEnhance(slot, discount, free)) return false;
+  const cost = free ? 0 : forgeCost(slot, discount);
+  if (!free) player.gold -= cost;
+  const next = getEnhance(slot) + 1;
+  setEnhance(slot, next);
+  if (runStats) {
+    if (slot === "weapon") runStats.maxWeaponEnhance = Math.max(runStats.maxWeaponEnhance || 0, next);
+    else runStats.maxArmorEnhance = Math.max(runStats.maxArmorEnhance || 0, next);
+    if (source !== "blessing") {
+      if (slot === "weapon") addRunStat("forgeWeaponCount", 1, false);
+      else addRunStat("forgeArmorCount", 1, false);
+      addRunStat("forgeGoldSpent", cost, false);
+    }
+  }
+  renderStatus();
+  return true;
+}
 
 // ====================================================================
 // DOM・UI
@@ -1194,16 +1429,20 @@ function renderStatus() {
   const fx = player.effects.length
     ? `<div class="effects">状態: ${player.effects.map(e => `${effLabel(e.name)}(${e.turns})`).join(", ")}</div>`
     : "";
+  const mg = (runStats && runStats.miniGoal)
+    ? `<div class="mini-goal">${escapeHtml(miniGoalText())}</div>`
+    : "";
 
   $statusGrid.innerHTML = `
     <span class="lbl">HP</span><span class="val" style="color:${hpColor}">${player.hp}/${player.max_hp}</span>
     <span class="lbl">EXP</span><span class="val">${player.exp}/${needExp(player)}</span>
     <span class="lbl">攻/防</span><span class="val">${pAtk(player)} / ${pDef(player)}</span>
     <span class="lbl">所持金</span><span class="val" style="color:var(--accent)">${player.gold}G</span>
-    <span class="lbl">武器</span><span class="val">${player.weapon || "なし"}</span>
-    <span class="lbl">防具</span><span class="val">${player.armor || "なし"}</span>
+    <span class="lbl">武器</span><span class="val">${escapeHtml(equipLabel("weapon"))}</span>
+    <span class="lbl">防具</span><span class="val">${escapeHtml(equipLabel("armor"))}</span>
     <span class="lbl">所持品</span><span class="val" style="grid-column: span 3; font-size:11px;">${player.inventory.length ? compactInv(player.inventory) : "空"}</span>
     <div class="hp-bar"><div style="width:${hpRatio*100}%; background:${hpColor};"></div></div>
+    ${mg}
     ${fx}
   `;
 }
@@ -1321,15 +1560,20 @@ function removeOne(arr, x) { const i = arr.indexOf(x); if (i >= 0) arr.splice(i,
 
 function useItem(p, item, inCombat = false, target = null, canFlee = true) {
   const info = ITEMS[item];
+  if (!info) return [false, "その品は壊れて使えない。"];
   if (info.category === "weapon") {
-    const old = p.weapon; p.weapon = item; removeOne(p.inventory, item);
+    const old = p.weapon;
+    const lost = old && (p.weaponEnhance || 0) > 0;
+    p.weapon = item; p.weaponEnhance = 0; removeOne(p.inventory, item);
     if (old) p.inventory.push(old);
-    return [true, `${item} を装備した。${old ? `（${old} を外した）` : ""}`];
+    return [true, `${item} を装備した。${old ? `（${old} を外した）` : ""}${lost ? " 強化された武器を手放した。" : ""}`];
   }
   if (info.category === "armor") {
-    const old = p.armor; p.armor = item; removeOne(p.inventory, item);
+    const old = p.armor;
+    const lost = old && (p.armorEnhance || 0) > 0;
+    p.armor = item; p.armorEnhance = 0; removeOne(p.inventory, item);
     if (old) p.inventory.push(old);
-    return [true, `${item} を装備した。${old ? `（${old} を外した）` : ""}`];
+    return [true, `${item} を装備した。${old ? `（${old} を外した）` : ""}${lost ? " 強化された防具を手放した。" : ""}`];
   }
   switch (info.effect) {
     case "heal": {
@@ -1365,13 +1609,14 @@ function useItem(p, item, inCombat = false, target = null, canFlee = true) {
       const power = info.power + (isMage ? 10 : 0) + ampLv * 5 + wandBonus;
       target.hp  -= power;
       trackDamageDealt(power);
-      if (runStats) runStats.scrollUseCount += 1;
+      addRunStat("scrollUseCount");
+      if (isMage) addClassFeatureStat("mageScrollBoosts");
       // 魔導節約：基礎20% + Lv*10%（上限60%）
       const saveLv  = isMage ? Math.min(4, growthLv("魔導節約")) : 0;
       const conserveRate = isMage ? Math.min(0.60, 0.20 + saveLv * 0.10) : 0;
       const conserve = isMage && Math.random() < conserveRate;
       if (!conserve) removeOne(p.inventory, item);
-      else if (runStats) runStats.mageScrollSaves += 1;
+      else if (runStats) addClassFeatureStat("mageScrollSaves");
       // 巻物術師実績
       if (isMage && runStats && (runStats.scrollUseCount + runStats.mageScrollSaves) >= 5) {
         unlockAch("mage_scrollmaster");
@@ -1381,7 +1626,8 @@ function useItem(p, item, inCombat = false, target = null, canFlee = true) {
         if (runStats) runStats.equipmentSynergyTriggers += 1;
         tail += "  木の棒を杖代わりに掲げた。";
       }
-      if (conserve) tail += "  魔導士の知恵で巻物は崩れずに残った！";
+      if (isMage) tail += "  魔導士の詠唱が巻物の力を高めた！";
+      if (conserve) tail += "  巻物は崩れずに残った。";
       return [true, `魔法の巻物が炸裂！ ${target.name} に ${power} のダメージ！${tail}`];
     }
     case "level_up": {
@@ -1479,14 +1725,25 @@ async function combat(m, canFlee = true) {
       }
     } else if (idx === 1) {
       defending = true;
-      runStats.defendingTimes += 1;
-      tell("構えを取った。", "shop");
+      addRunStat("defendingTimes");
+      if (player.cls === "戦士") {
+        addClassFeatureStat("warriorDefends");
+        tell("戦士の構え！", "shop");
+      } else {
+        tell("構えを取った。", "shop");
+      }
     } else if (idx === 2) {
       const consumed = await openInventory(true, m, canFlee);
       if (consumed === null) skipEnemy = true;
       // 煙玉が成立するのは canFlee=true 時のみ。canFlee=false なら useItem が消費せず
       // ガード済みなので、ここに "煙玉" の consumed が届かない（保険として canFlee 確認）
-      else if (consumed === "煙玉" && canFlee) { tell(`${m.name} を撒いて逃げ切った！`, "shop"); runStats.fleeSuccessCount += 1; saveGame(); return false; }
+      else if (consumed === "煙玉" && canFlee) {
+        if (player.cls === "盗賊") { addClassFeatureStat("rogueEscapes"); tell("盗賊の足さばき！", "shop"); }
+        tell(`${m.name} を撒いて逃げ切った！`, "shop");
+        addRunStat("fleeSuccessCount");
+        saveGame();
+        return false;
+      }
       else if (m.hp <= 0) break;
     } else if (idx === 3) {
       const isRogue = player.cls === "盗賊";
@@ -1498,10 +1755,10 @@ async function combat(m, canFlee = true) {
       const cap = ({ story: 0.95, normal: 0.90, challenge: 0.85 })[currentDifficulty()];
       const chance = Math.min(cap, raw);
       if (Math.random() < chance) {
-        if (isRogue) tell("盗賊の脚で素早く距離を取った。", "shop");
+        if (isRogue) { addClassFeatureStat("rogueEscapes"); tell("盗賊の足さばき！", "shop"); }
         if (armorBonus > 0) { runStats.equipmentSynergyTriggers += 1; tell("革の鎧が音を抑え、滑るように離脱した。", "shop"); }
         tell(`${m.name} を撒いて逃げ切った！`, "shop");
-        runStats.fleeSuccessCount += 1;
+        addRunStat("fleeSuccessCount");
         saveGame();
         return false;
       }
@@ -1526,6 +1783,7 @@ async function combat(m, canFlee = true) {
             edmg = Math.max(1, edmg - 2);
             runStats.equipmentSynergyTriggers += 1;
           }
+          tell("戦士の構えが衝撃を受け止めた。", "shop");
         }
         // ボス戦は最低2ダメ保証（防御無双による作業化防止）
         if (isBossBattleFloor(player.floor)) edmg = Math.max(2, edmg);
@@ -1558,8 +1816,8 @@ async function combat(m, canFlee = true) {
           }
           m.hp -= cdmg;
           trackDamageDealt(cdmg);
-          if (runStats) runStats.warriorCounters += 1;
-          tell(`戦士のカウンター！ ${m.name} に ${cdmg} の反撃ダメージ。`, "shop");
+          addClassFeatureStat("warriorCounters");
+          tell(`戦士の反撃！ ${m.name} に ${cdmg} ダメージ。`, "shop");
         }
       }
     }
@@ -1596,7 +1854,11 @@ async function eventMonster() {
   const idx = await ask(["戦う", { label: "様子を見て逃げる", desc: "階層が深いほど低下" }]);
   if (idx === 1) {
     const chance = Math.max(0.25, 0.7 - player.floor * 0.02);
-    if (Math.random() < chance) { tell("そっと後退し、気付かれずに通り抜けた。", "shop"); return; }
+    if (Math.random() < chance) {
+      if (player.cls === "盗賊") { addClassFeatureStat("rogueEscapes"); tell("盗賊の足さばき！", "shop"); }
+      tell("そっと後退し、気付かれずに通り抜けた。", "shop");
+      return;
+    }
     tell("気付かれた！", "danger");
   }
   await combat(m);
@@ -1610,14 +1872,15 @@ async function eventTreasure() {
     "立ち去る",
   ]);
   if (idx === 2) return;
+  addRunStat("treasureOpens");
   let trapped = Math.random() < 0.20 + player.floor * 0.01;
   // 盗賊補正：察知率は基礎50%+「罠抜け」Lv*10% (上限90%)
   if (trapped && player.cls === "盗賊") {
     const detectRate = Math.min(0.90, 0.50 + growthLv("罠抜け") * 0.10);
     if (Math.random() < detectRate) {
       trapped = false;
-      if (runStats) runStats.rogueTrapAvoids += 1;
-      tell("盗賊の勘 — 細工の匂いを察知し、針を弾き返した。", "shop");
+      addClassFeatureStat("rogueTrapAvoids");
+      tell("盗賊の勘が働いた！", "shop");
     }
   }
   if (idx === 1) {
@@ -1638,14 +1901,15 @@ async function eventTreasure() {
     gained.push(it);
   }
   // 盗賊「目利き」: Lv*15%で高品質アイテム追加（上限50%）
-  if (player.cls === "盗賊" && growthLv("目利き") > 0) {
-    const upRate = Math.min(0.50, growthLv("目利き") * 0.15);
+  if (player.cls === "盗賊") {
+    const upRate = Math.min(0.50, 0.10 + growthLv("目利き") * 0.15);
     if (Math.random() < upRate) {
       const goodPool = [["ハイポーション", 0.40], ["魔法の巻物", 0.30], ["鋼の剣", 0.15], ["鎖帷子", 0.10], ["エリクサー", 0.05]];
       const extra = weightedChoice(goodPool);
       player.inventory.push(extra);
       gained.push(extra);
-      tell("目利きが活きた！ 質の良い品も見つけた。", "shop");
+      addClassFeatureStat("rogueGoodLoots");
+      tell("盗賊の目利き！", "shop");
     }
   }
   const gold = randInt(5, 15) * player.floor;
@@ -1674,7 +1938,10 @@ async function eventTrap() {
   if (idx === 0) {
     if (Math.random() < sr) {
       tell(`${t.desc} だがあなたは見切って避けた！`, "shop");
-      if (player.cls === "盗賊" && growthLv("罠抜け") > 0) tell("罠抜けの呼吸が活きた。", "shop");
+      if (player.cls === "盗賊") {
+        addClassFeatureStat("rogueTrapAvoids");
+        tell("盗賊の勘が働いた！", "shop");
+      }
       gainExp(player, 3); renderStatus();
       return;
     }
@@ -1778,6 +2045,10 @@ async function eventMerchant() {
     player.inventory.push(item);
     stock.splice(idx, 1);
     tell(`${item} を ${price}G で購入した。`, "gold");
+    if (player.cls === "盗賊" && price < ITEMS[item].price) {
+      addClassFeatureStat("rogueDiscounts");
+      tell("盗賊の目利き！", "shop");
+    }
     // 商人の紹介状は初購入で消費
     if (runStats.merchantIntroAvailable) {
       runStats.merchantIntroAvailable = false;
@@ -1805,7 +2076,8 @@ async function eventShrine() {
       const c = Math.min(0.60, growthLv("叡智") * 0.15);
       if (Math.random() < c) {
         player.max_hp += 3; player.hp = player.max_hp;
-        tell("叡智の祈りが届き、最大HPが3上昇した。", "heal");
+        addClassFeatureStat("mageEventInsights");
+        tell("魔導士の叡智が道を開いた！ 最大HPが3上昇した。", "heal");
       }
     }
   } else if (idx === 1) {
@@ -1846,16 +2118,27 @@ async function eventFountain() {
   // さらに「叡智」Lv毎に良効果範囲を +0.02
   const isMage = player.cls === "魔導士";
   const eichi  = isMage ? growthLv("叡智") : 0;
-  if (isMage) tell("魔導士の素養が泉の力を引き寄せる…", "shop");
   const shift = eichi * 0.02;
   const t1 = (isMage ? 0.34 : 0.30) + shift;
   const t2 = (isMage ? 0.62 : 0.55) + shift;
   const t3 = (isMage ? 0.85 : 0.75) + shift;
   const t4 = (isMage ? 0.93 : 0.90) + shift;
   const r = Math.random();
-  if (r < t1) { player.max_hp += 10; player.hp = player.max_hp; tell("最大HPが10上昇した！", "heal"); }
-  else if (r < t2) { player.base_atk += 2; tell("攻撃力が永続的に2上昇した！", "heal"); }
-  else if (r < t3) { player.base_def += 2; tell("防御力が永続的に2上昇した！", "heal"); }
+  if (r < t1) {
+    player.max_hp += 10; player.hp = player.max_hp;
+    if (isMage) { addClassFeatureStat("mageEventInsights"); tell("魔導士の叡智が道を開いた！", "shop"); }
+    tell("最大HPが10上昇した！", "heal");
+  }
+  else if (r < t2) {
+    player.base_atk += 2;
+    if (isMage) { addClassFeatureStat("mageEventInsights"); tell("魔導士の叡智が道を開いた！", "shop"); }
+    tell("攻撃力が永続的に2上昇した！", "heal");
+  }
+  else if (r < t3) {
+    player.base_def += 2;
+    if (isMage) { addClassFeatureStat("mageEventInsights"); tell("魔導士の叡智が道を開いた！", "shop"); }
+    tell("防御力が永続的に2上昇した！", "heal");
+  }
   else if (r < t4) {
     let l = randInt(5, 15);
     // 魔導士+聖なる鎧：泉の悪効果ダメ -50%
@@ -1893,6 +2176,7 @@ async function eventRiddle() {
   tellEvent("謎かけ", `スフィンクスが立ち塞がる。\n「謎を解けば富を授け、間違えば命を頂く。」\n\n${r.q}`, "shop");
   const ans = (await askText("答え")).trim();
   if (ans === r.a) {
+    addRunStat("riddleSuccesses");
     // 魔導士「叡智」: 報酬+10%/Lv（上限+50%）
     const eichi = (player.cls === "魔導士") ? Math.min(5, growthLv("叡智")) : 0;
     const mult  = 1 + eichi * 0.10;
@@ -1900,6 +2184,7 @@ async function eventRiddle() {
     addGold(player, g);
     const expGain = Math.floor(20 * mult);
     const msgs = gainExp(player, expGain);
+    if (player.cls === "魔導士") { addClassFeatureStat("mageEventInsights"); tell("魔導士の叡智が道を開いた！", "shop"); }
     tell(`正解！ ${g}G と経験値+${expGain} を得た。${eichi ? " (叡智の加護)" : ""} ` + msgs.join(" "), "gold");
     unlockAch("riddle_master");
   } else {
@@ -1934,6 +2219,158 @@ async function eventGamble() {
   }
 }
 
+function forgeOption(slot, discount = 1) {
+  const label = slot === "weapon" ? "武器を強化する" : "防具を強化する";
+  if (!hasForgeTarget(slot)) return { label, desc: "装備なし", disabled: true };
+  const cur = getEnhance(slot);
+  const limit = forgeLimit();
+  if (cur >= limit) return { label: `${label}（+${cur}）`, desc: `上限 +${limit}`, disabled: true };
+  const cost = forgeCost(slot, discount);
+  return {
+    label: `${label}  +${cur}→+${cur + 1}  ${cost}G`,
+    desc: `${slot === "weapon" ? equipLabel("weapon") : equipLabel("armor")} を強化`,
+    disabled: player.gold < cost,
+  };
+}
+async function eventForge(discount = 1, title = "鍛冶屋") {
+  const body = discount < 1
+    ? "煤けた炉がまだ熱を帯びている。通常より少し安く鍛えられそうだ。"
+    : "旅の鍛冶屋が小さな炉を据えている。\n「金さえあれば、今の装備を少しだけ強くできるぞ」";
+  tellEvent(title, body, "shop");
+  const idx = await ask([
+    forgeOption("weapon", discount),
+    forgeOption("armor", discount),
+    { label: "立ち去る" },
+  ]);
+  if (idx === 2) return;
+  const slot = idx === 0 ? "weapon" : "armor";
+  const before = getEnhance(slot);
+  const ok = enhanceEquipment(slot, { discount, source: "forge" });
+  if (!ok) { tell("今は強化できない。", "dim"); return; }
+  const label = slot === "weapon" ? equipLabel("weapon") : equipLabel("armor");
+  tell(`鍛冶の火花が散った。${label} は +${before + 1} になった。`, "gold");
+  saveGame();
+}
+function blessingOptions(isEndless = false) {
+  const pool = BLESSINGS
+    .filter(b => b.id !== "forge" || canEnhance("weapon", 1, true) || canEnhance("armor", 1, true))
+    .map(b => [b, isEndless && b.endlessWeight ? b.endlessWeight : b.weight]);
+  const picked = [];
+  const work = [...pool];
+  while (picked.length < 3 && work.length > 0) {
+    const b = weightedChoice(work);
+    picked.push(b);
+    const pos = work.findIndex(([x]) => x.id === b.id);
+    if (pos >= 0) work.splice(pos, 1);
+  }
+  return picked;
+}
+function applyBlessing(b) {
+  if (!b || !player) return "";
+  if (b.id === "sword") {
+    player.base_atk += 1;
+    return "攻撃が1上がった。";
+  }
+  if (b.id === "shield") {
+    player.base_def += 1;
+    return "防御が1上がった。";
+  }
+  if (b.id === "life") {
+    player.max_hp += 5;
+    player.hp = Math.min(player.max_hp, player.hp + 5);
+    return "最大HPとHPが5上がった。";
+  }
+  if (b.id === "merchant") {
+    addGold(player, 50);
+    return "50Gを得た。";
+  }
+  if (b.id === "apothecary") {
+    player.inventory.push("ポーション");
+    return "ポーションを得た。";
+  }
+  if (b.id === "escape") {
+    player.inventory.push("煙玉");
+    return "煙玉を得た。";
+  }
+  if (b.id === "wisdom") {
+    player.inventory.push("魔法の巻物");
+    return "魔法の巻物を得た。";
+  }
+  if (b.id === "forge") {
+    const slots = ["weapon", "armor"].filter(s => canEnhance(s, 1, true));
+    const slot = slots.length === 2
+      ? (getEnhance("weapon") <= getEnhance("armor") ? "weapon" : "armor")
+      : slots[0];
+    if (!slot) return "鍛える装備がなかった。";
+    enhanceEquipment(slot, { free: true, source: "blessing" });
+    return `${slot === "weapon" ? equipLabel("weapon") : equipLabel("armor")} が強化された。`;
+  }
+  return "";
+}
+async function offerBlessingChoice(sourceLabel) {
+  const options = blessingOptions(isEndlessMode());
+  if (options.length === 0) return;
+  tellEvent("✦ 記憶の祝福", `${sourceLabel}の記憶が形を成す。1つ選べ。`, "shop");
+  const idx = await ask(options.map(b => ({ label: b.name, desc: b.desc })));
+  const chosen = options[idx];
+  const result = applyBlessing(chosen);
+  if (runStats) {
+    runStats.blessingChoices.push({ id: chosen.id, name: chosen.name, floor: player.floor, source: sourceLabel });
+    addRunStat("blessingCount", 1, false);
+  }
+  tell(`${chosen.name}を選んだ。${result}`, "gold");
+  renderStatus();
+  saveGame();
+}
+async function offerMinorDepthBlessing(sourceLabel) {
+  const pool = [
+    { id: "minor_heal", name: "灯火の記憶", desc: "HPを少し回復", apply: () => `HPが ${heal(player, Math.max(8, Math.floor(player.max_hp * 0.18)))} 回復した。` },
+    { id: "minor_gold", name: "小銭の記憶", desc: "30Gを得る", apply: () => { addGold(player, 30); return "30Gを得た。"; } },
+    { id: "minor_potion", name: "薬草の記憶", desc: "ポーション +1", apply: () => { player.inventory.push("ポーション"); return "ポーションを得た。"; } },
+    { id: "minor_scroll", name: "紙片の記憶", desc: "巻物 +1", apply: () => { player.inventory.push("魔法の巻物"); return "魔法の巻物を得た。"; } },
+  ];
+  const options = [];
+  const work = [...pool];
+  while (options.length < 3 && work.length) {
+    const i = rand(work.length);
+    options.push(work.splice(i, 1)[0]);
+  }
+  tellEvent(sourceLabel, "深層の記憶が三つに分かれている。", "shop");
+  const idx = await ask(options.map(b => ({ label: b.name, desc: b.desc })));
+  const chosen = options[idx];
+  const result = chosen.apply();
+  if (runStats) {
+    runStats.blessingChoices.push({ id: chosen.id, name: chosen.name, floor: player.floor, source: sourceLabel });
+    addRunStat("blessingCount", 1, false);
+  }
+  tell(`${chosen.name}を選んだ。${result}`, "gold");
+  renderStatus();
+  saveGame();
+}
+async function eventDepthCampfire() {
+  tellEvent("深層の焚き火", "誰が残したのか、青白い火が静かに燃えている。", "shop");
+  const idx = await ask([
+    { label: "休む", desc: "HPを少し回復" },
+    { label: "祈る", desc: "小さな祝福を得る" },
+    { label: "立ち去る" },
+  ]);
+  if (idx === 0) {
+    const g = heal(player, Math.max(10, Math.floor(player.max_hp * 0.25)));
+    tell(`火にあたり、HPが ${g} 回復した。`, "heal");
+  } else if (idx === 1) {
+    await offerMinorDepthBlessing("深層の焚き火");
+  }
+}
+async function eventDepthMilestone() {
+  if (!isEndlessMode() || player.floor < 30 || player.floor % 10 !== 0) return;
+  const events = [
+    eventDepthCampfire,
+    () => eventForge(0.8, "忘れられた鍛冶場"),
+    () => offerMinorDepthBlessing("記憶の分岐路"),
+  ];
+  await choice(events)();
+}
+
 const EVENTS_NORMAL = [
   [eventMonster,  35],
   [eventTreasure, 14],
@@ -1944,6 +2381,7 @@ const EVENTS_NORMAL = [
   [eventFountain,  5],
   [eventRiddle,    4],
   [eventGamble,    4],
+  [eventForge,      3],
 ];
 function pickEvent() { return weightedChoice(EVENTS_NORMAL); }
 
@@ -1964,6 +2402,10 @@ async function eventBoss() {
   const won = await combat(m, false);
   if (won) {
     addShardsToRun(`${m.name}撃破`, 2);
+    if (player.cls === "戦士") {
+      addClassFeatureStat("warriorBossKills");
+      tell("戦士の武勇が響いた！", "shop");
+    }
     if (isEndless) {
       runStats.depthBossKills = (runStats.depthBossKills || 0) + 1;
       if (runStats.depthBossKills >= 5) unlockAch("endless_boss_5");
@@ -1971,6 +2413,10 @@ async function eventBoss() {
   }
   // GAME CLEARは本編20F限定。深層モードでは絶対に発火しない。
   if (won && player.floor === FINAL_FLOOR && !isEndless) await ending();
+  if (won && (isEndless || player.floor < FINAL_FLOOR)) {
+    await offerBlessingChoice(isEndless ? "深層ボス" : "ボス");
+    if (isEndless) await eventDepthMilestone();
+  }
 }
 
 // 階層到達系の実績をチェック
@@ -2074,8 +2520,11 @@ function applyMemoryMerchantPurchase(it) {
     const curAtk = player.weapon ? (ITEMS[player.weapon].atk || 0) : -1;
     if (info.atk > curAtk) {
       const old = player.weapon;
+      const lost = old && (player.weaponEnhance || 0) > 0;
       player.weapon = it.item;
+      player.weaponEnhance = 0;
       if (old) player.inventory.push(old);
+      if (lost) tell("強化された武器を手放した。", "dim");
     } else {
       player.inventory.push(it.item);
     }
@@ -2083,8 +2532,11 @@ function applyMemoryMerchantPurchase(it) {
     const curDef = player.armor ? (ITEMS[player.armor].defense || 0) : -1;
     if (info.defense > curDef) {
       const old = player.armor;
+      const lost = old && (player.armorEnhance || 0) > 0;
       player.armor = it.item;
+      player.armorEnhance = 0;
       if (old) player.inventory.push(old);
+      if (lost) tell("強化された防具を手放した。", "dim");
     } else {
       player.inventory.push(it.item);
     }
@@ -2202,9 +2654,11 @@ function determineTitle() {
   const cs = runStats;
   // 深層モード時は深層専用称号を優先
   if (player.mode === "endless") {
-    if (player.floor >= 100) return "果てなき者";
-    if ((cs.depthBossKills || 0) >= 5) return "残響砕き";
-    if (player.floor >= 30) return "深層帰り";
+    if (player.floor >= 100) return "無限の挑戦者";
+    if ((cs.depthBossKills || 0) >= 5) return "残響を砕く者";
+    if (player.floor >= 50) return "深淵を覗く者";
+    if (player.floor >= 30) return "果てなき探索者";
+    if (player.floor >= 21) return "深層への一歩";
   }
   if (cls === "戦士") {
     if (cs.warriorCounters >= 8) return "反撃の戦士";
@@ -2282,6 +2736,8 @@ async function eventLocksmith() {
       player.inventory.push(item);
       const g = randInt(40, 80) + player.floor * 10;
       addGold(player, g);
+      addClassFeatureStat("rogueGoodLoots");
+      tell("盗賊の目利き！", "shop");
       tell(`鍵が開いた！ ${item} と ${g}G を入手！`, "gold");
       unlockAch("rogue_lockmaster");
       checkClassEventMaster();
@@ -2298,6 +2754,8 @@ async function eventLocksmith() {
       player.inventory.push(item);
       const g = randInt(15, 30) + player.floor * 3;
       addGold(player, g);
+      addClassFeatureStat("rogueTrapAvoids");
+      tell("盗賊の勘が働いた！", "shop");
       tell(`罠を外した。${item} と ${g}G を回収。`, "shop");
     } else {
       const dmg = randInt(3, 6);
@@ -2323,6 +2781,8 @@ async function eventLibrary() {
       runStats.classEventSuccess.mage += 1;
       const n = 1 + (Math.random() < 0.30 ? 1 : 0);
       for (let i = 0; i < n; i++) player.inventory.push("魔法の巻物");
+      addClassFeatureStat("mageEventInsights");
+      tell("魔導士の叡智が道を開いた！", "shop");
       tell(`魔術書から知識を得て、魔法の巻物 ×${n} を作り出した！`, "gold");
       unlockAch("mage_archivist");
       checkClassEventMaster();
@@ -2337,6 +2797,8 @@ async function eventLibrary() {
     const reward = 25 + growthLv("叡智") * 10;
     const msgs = gainExp(player, reward);
     runStats.classEventSuccess.mage += 1;
+    addClassFeatureStat("mageEventInsights");
+    tell("魔導士の叡智が道を開いた！", "shop");
     tell(`古文書を解読した！ 経験値 +${reward}。 ` + msgs.join(" "), "shop");
     if (growthLv("叡智") > 0) {
       const g = 20 + player.floor * 5;
@@ -2375,6 +2837,7 @@ async function titleScreen() {
       <div style="text-align:center;border:none;background:transparent;padding:14px 0;">
         <div class="title-logo">Gemini Rogue</div>
         <div class="title-sub">〜 全${FINAL_FLOOR}階の迷宮で魔王ザロスを討て 〜</div>
+        <div class="version-tag">${APP_VERSION}</div>
       </div>
     `);
     if (!LS_OK) tell("⚠ ローカル保存が利用できない環境です。セーブと記録は保持されません。", "danger");
@@ -2477,6 +2940,7 @@ async function startNewGame(mode = "story") {
   player.mode = mode;
   if (mode === "endless") player.floor = 21;
   runStats = newRunStats(mode);
+  assignMiniGoal();
   // 強化適用
   applyUpgrades(player);
   // 商人画面中のリロードでも購入済み装備・アイテムを復元できるように先に保存する。
@@ -2497,6 +2961,7 @@ async function startNewGame(mode = "story") {
     : `${name}（${cls}）は ${DIFFICULTIES[difficulty].label} の迷宮へ向かった。`;
   tellEvent("冒険の始まり", intro);
   if (upMsgs.length) tell("✦ 記憶の強化が発動: " + upMsgs.join(" / "), "shop");
+  if (runStats.miniGoal) tell(`ミニ目標: ${runStats.miniGoal.text}（報酬: ${miniGoalRewardText(runStats.miniGoal)}）`, "shop");
 
   // 記憶の商人（欠片で開始準備を整える機会）— 深層探索でも使える
   await showMemoryMerchant();
@@ -2599,6 +3064,10 @@ async function showRecords() {
     const upTag = lr.hasUpgrades ? " ✦ 強化あり" : "";
     const titleRow = lr.title ? `<tr><td>称号</td><td>${escapeHtml(lr.title)}</td></tr>` : "";
     const growthRow = lr.growthSummary ? `<tr><td>成長</td><td>${escapeHtml(lr.growthSummary)}</td></tr>` : "";
+    const blessRow = (lr.blessingChoices && lr.blessingChoices.length) ? `<tr><td>祝福</td><td>${lr.blessingChoices.map(b => escapeHtml(b.name)).join(" / ")}</td></tr>` : "";
+    const forgeRow = `<tr><td>鍛冶</td><td>武器${lr.forgeWeaponCount || 0} / 防具${lr.forgeArmorCount || 0} / ${lr.forgeGoldSpent || 0}G</td></tr>`;
+    const miniRow = lr.miniGoal ? `<tr><td>ミニ目標</td><td>${escapeHtml(lr.miniGoal.text)} ${lr.miniGoal.completed ? "達成" : "未達成"}</td></tr>` : "";
+    const evalRow = lr.evaluation ? `<tr><td>評価</td><td>${escapeHtml(lr.evaluation)}</td></tr>` : "";
     const ces = lr.classEventSuccess || {};
     const ceParts = [];
     if (ces.warrior) ceParts.push(`決闘${ces.warrior}`);
@@ -2611,9 +3080,14 @@ async function showRecords() {
         <tr><td>勇者</td><td>${escapeHtml(lr.name)} (${lr.cls})</td></tr>
         <tr><td>到達階 / Lv</td><td>B${lr.floor}F / Lv${lr.level}</td></tr>
         <tr><td>撃破 / 最大ダメ</td><td>${lr.kills}体 / ${lr.maxDamage}</td></tr>
+        <tr><td>装備</td><td>${escapeHtml(itemPlusLabel(lr.weapon, lr.weaponEnhance || 0))} / ${escapeHtml(itemPlusLabel(lr.armor, lr.armorEnhance || 0))}</td></tr>
         ${titleRow}
         ${growthRow}
         ${ceRow}
+        ${blessRow}
+        ${forgeRow}
+        ${miniRow}
+        ${evalRow}
         <tr><td>獲得欠片</td><td>${lr.earnedShards || 0} 個</td></tr>
         <tr><td>${lr.kind === "win" ? "勝因" : "死因"}</td><td>${escapeHtml(lr.reason || "—")}</td></tr>
         <tr><td>スコア</td><td class="score">${lr.score}</td></tr>
@@ -2624,14 +3098,23 @@ async function showRecords() {
     const dl  = (er.difficulty && DIFFICULTIES[er.difficulty]) ? DIFFICULTIES[er.difficulty].label : "—";
     const titleRow = er.title ? `<tr><td>称号</td><td>${escapeHtml(er.title)}</td></tr>` : "";
     const growthRow = er.growthSummary ? `<tr><td>成長</td><td>${escapeHtml(er.growthSummary)}</td></tr>` : "";
+    const blessRow = (er.blessingChoices && er.blessingChoices.length) ? `<tr><td>祝福</td><td>${er.blessingChoices.map(b => escapeHtml(b.name)).join(" / ")}</td></tr>` : "";
+    const forgeRow = `<tr><td>鍛冶</td><td>武器${er.forgeWeaponCount || 0} / 防具${er.forgeArmorCount || 0} / ${er.forgeGoldSpent || 0}G</td></tr>`;
+    const miniRow = er.miniGoal ? `<tr><td>ミニ目標</td><td>${escapeHtml(er.miniGoal.text)} ${er.miniGoal.completed ? "達成" : "未達成"}</td></tr>` : "";
+    const evalRow = er.evaluation ? `<tr><td>評価</td><td>${escapeHtml(er.evaluation)}</td></tr>` : "";
     html += `<h3>直近の深層探索</h3>
       <table>
         <tr><td>結果</td><td>${dl} / B${er.floor}F / Lv${er.level}</td></tr>
         <tr><td>探索者</td><td>${escapeHtml(er.name)} (${er.cls})</td></tr>
         <tr><td>撃破 / 深層ボス</td><td>${er.kills}体 / ${er.depthBossKills || 0}体</td></tr>
         <tr><td>最大ダメージ</td><td>${er.maxDamage}</td></tr>
+        <tr><td>装備</td><td>${escapeHtml(itemPlusLabel(er.weapon, er.weaponEnhance || 0))} / ${escapeHtml(itemPlusLabel(er.armor, er.armorEnhance || 0))}</td></tr>
         ${titleRow}
         ${growthRow}
+        ${blessRow}
+        ${forgeRow}
+        ${miniRow}
+        ${evalRow}
         <tr><td>獲得欠片</td><td>${er.earnedShards || 0} 個</td></tr>
         <tr><td>終端</td><td>${escapeHtml(er.reason || "—")}</td></tr>
         <tr><td>スコア</td><td class="score">${er.score}</td></tr>
@@ -2723,6 +3206,81 @@ async function showUpgradeShop() {
   }
 }
 
+function countInventory(name) {
+  return player && Array.isArray(player.inventory) ? player.inventory.filter(x => x === name).length : 0;
+}
+function determineRunEvaluation(kind = "loss") {
+  if (!runStats || !player) return "探索者";
+  if (player.mode === "endless" && player.floor >= 30) return "深層の挑戦者";
+  if ((runStats.forgeWeaponCount || 0) + (runStats.forgeArmorCount || 0) >= 3) return "鍛冶好き";
+  if ((runStats.scrollUseCount || 0) + (runStats.mageScrollBoosts || 0) >= 3) return "巻物使い";
+  if ((runStats.rogueEscapes || 0) >= 3 || (runStats.fleeSuccessCount || 0) >= 3) return "逃げ足の達人";
+  if ((runStats.treasureOpens || 0) >= 3 || (runStats.totalGoldGained || 0) >= 600) return "強欲な旅人";
+  if ((runStats.defendingTimes || 0) + (runStats.warriorCounters || 0) >= 5) return "慎重な探索者";
+  if ((runStats.kills || 0) >= Math.max(5, player.floor - 1) || kind === "win") return "正面突破";
+  return "慎重な探索者";
+}
+function buildReplayLine() {
+  if (!player || !runStats) return "";
+  const weapon = equipLabel("weapon");
+  if (player.cls === "戦士") {
+    return `戦士は${weapon}を携え、${runStats.warriorCounters || 0}度の反撃で迷宮を押し返した。`;
+  }
+  if (player.cls === "盗賊") {
+    return `盗賊は罠を避け、宝と煙に紛れてB${player.floor}Fまで駆けた。`;
+  }
+  if (player.cls === "魔導士") {
+    return `魔導士は巻物の力を操り、深い記憶を読み解いた。`;
+  }
+  return `${player.name}はB${player.floor}Fまで進んだ。`;
+}
+function buildDeathHint(kind) {
+  if (kind === "win" || !player || !runStats) return "";
+  const healing = countInventory("ポーション") + countInventory("ハイポーション") + countInventory("エリクサー");
+  if (healing === 0) return "回復手段が尽きていた。";
+  if (player.mode === "endless" && (player.armorEnhance || 0) === 0) return "防具強化も検討するとよいかもしれない。";
+  if ((player.gold || 0) >= 250) return "GOLDを使い切れなかった。";
+  if (countInventory("煙玉") > 0 && !isBossBattleFloor(player.floor)) return "逃走手段を残したまま倒れた。";
+  if (isBossBattleFloor(player.floor)) return "ボス戦への備えが不足していたかもしれない。";
+  return "次は回復と逃走の余裕を残したい。";
+}
+function classActivityRows() {
+  if (!runStats || !player) return [];
+  if (player.cls === "戦士") {
+    return [
+      ["反撃回数", `${runStats.warriorCounters || 0} 回`],
+      ["防御回数", `${runStats.warriorDefends || 0} 回`],
+      ["ボス撃破", `${runStats.warriorBossKills || 0} 体`],
+    ];
+  }
+  if (player.cls === "盗賊") {
+    return [
+      ["罠回避", `${runStats.rogueTrapAvoids || 0} 回`],
+      ["逃走成功", `${runStats.rogueEscapes || 0} 回`],
+      ["目利き/値引き", `${(runStats.rogueGoodLoots || 0) + (runStats.rogueDiscounts || 0)} 回`],
+    ];
+  }
+  if (player.cls === "魔導士") {
+    return [
+      ["巻物強化", `${runStats.mageScrollBoosts || 0} 回`],
+      ["巻物温存", `${runStats.mageScrollSaves || 0} 回`],
+      ["イベント洞察", `${runStats.mageEventInsights || 0} 回`],
+    ];
+  }
+  return [];
+}
+function snapshotMiniGoal() {
+  const goal = runStats && runStats.miniGoal;
+  if (!goal) return null;
+  return {
+    text: goal.text,
+    progress: miniGoalProgress(goal),
+    target: goal.target,
+    completed: !!(runStats.miniGoalCompleted || goal.completed),
+    reward: miniGoalRewardText(goal),
+  };
+}
+
 function computeScore(kind) {
   const base = kind === "win"
     ? player.gold + player.level * 100 + player.max_hp * 5
@@ -2752,18 +3310,11 @@ function buildEndCard(kind, reason) {
     ? `<div class="badge-list">${newlyEarned.map(d => `<span class="badge">🏆 ${escapeHtml(d.name)}</span>`).join("")}</div>`
     : "";
 
-  // クラス特技の発動回数（0件なら非表示）
-  const skills = [];
-  if (runStats.warriorCounters)  skills.push(["戦士の反撃",     `${runStats.warriorCounters} 回`]);
-  if (runStats.defendingTimes)   skills.push(["防御",            `${runStats.defendingTimes} 回`]);
-  if (runStats.rogueTrapAvoids)  skills.push(["盗賊の罠回避",   `${runStats.rogueTrapAvoids} 回`]);
-  if (runStats.fleeSuccessCount) skills.push(["逃走成功",        `${runStats.fleeSuccessCount} 回`]);
-  if (runStats.mageScrollSaves)  skills.push(["魔導士の巻物温存",`${runStats.mageScrollSaves} 回`]);
-  if (runStats.scrollUseCount)   skills.push(["巻物使用",        `${runStats.scrollUseCount} 回`]);
-  if (runStats.equipmentSynergyTriggers) skills.push(["装備シナジー", `${runStats.equipmentSynergyTriggers} 回`]);
-  const skillsBlock = skills.length
-    ? `<h3>クラス特技</h3><table>${skills.map(([k,v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("")}</table>`
-    : "";
+  const activityRows = classActivityRows();
+  const skillsBlock = `<h3>職業別活躍</h3><table>
+    ${activityRows.map(([k,v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("")}
+    <tr><td>特性発動合計</td><td>${runStats.classFeatureTriggers || 0} 回</td></tr>
+  </table>`;
 
   // クラス成長一覧
   let growthBlock = "";
@@ -2792,13 +3343,15 @@ function buildEndCard(kind, reason) {
   // 記憶の商人 購入品
   let mmBlock = "";
   const mmps = runStats.memoryMerchantPurchases || [];
+  const mmSpent = mmps.reduce((s, p) => s + (p.cost || 0), 0);
   if (mmps.length > 0) {
-    const totalCost = mmps.reduce((s, p) => s + (p.cost || 0), 0);
     const lines = mmps.map(p => {
       const qtyTag = (p.qty && p.qty > 1) ? `×${p.qty}` : "";
       return `<tr><td>${escapeHtml(p.item)}${qtyTag}</td><td>${p.cost}欠片</td></tr>`;
     }).join("");
-    mmBlock = `<h3>📦 記憶の商人</h3><table>${lines}<tr><td>合計</td><td>${totalCost}欠片</td></tr></table>`;
+    mmBlock = `<h3>記憶の商人</h3><table>${lines}<tr><td>消費欠片</td><td>${mmSpent} 個</td></tr></table>`;
+  } else if (isEndless) {
+    mmBlock = `<h3>記憶の商人</h3><table><tr><td>利用</td><td>なし</td></tr><tr><td>消費欠片</td><td>0 個</td></tr></table>`;
   }
 
   // 難易度・強化フラグ
@@ -2820,6 +3373,32 @@ function buildEndCard(kind, reason) {
     const lines = (runStats.shardLog || []).map(e => `<tr><td>${escapeHtml(e.reason)}</td><td>+${e.amount}</td></tr>`).join("");
     shardBlock = `<h3>💎 記憶の欠片  +${earned}</h3><table>${lines}</table>`;
   }
+  const mini = snapshotMiniGoal();
+  const miniBlock = mini ? `<h3>ミニ目標</h3><table>
+    <tr><td>目標</td><td>${escapeHtml(mini.text)}</td></tr>
+    <tr><td>進捗</td><td>${mini.completed ? "達成済み" : `${mini.progress}/${mini.target}`}</td></tr>
+    <tr><td>報酬</td><td>${escapeHtml(mini.reward || "—")}</td></tr>
+  </table>` : "";
+  const blessings = runStats.blessingChoices || [];
+  const blessingBlock = `<h3>祝福</h3><table>${
+    blessings.length
+      ? blessings.map(b => `<tr><td>B${b.floor}F</td><td>${escapeHtml(b.name)}</td></tr>`).join("")
+      : `<tr><td>選択</td><td>なし</td></tr>`
+  }</table>`;
+  const forgeBlock = `<h3>鍛冶記録</h3><table>
+    <tr><td>武器強化</td><td>${runStats.forgeWeaponCount || 0} 回</td></tr>
+    <tr><td>防具強化</td><td>${runStats.forgeArmorCount || 0} 回</td></tr>
+    <tr><td>使用GOLD</td><td>${runStats.forgeGoldSpent || 0}G</td></tr>
+    <tr><td>最終強化</td><td>武器 +${player.weaponEnhance || 0} / 防具 +${player.armorEnhance || 0}</td></tr>
+  </table>`;
+  const evaluation = determineRunEvaluation(kind);
+  const replay = buildReplayLine();
+  const hint = buildDeathHint(kind);
+  const adventureBlock = `<h3>今回の冒険</h3><table>
+    <tr><td>評価</td><td>${escapeHtml(evaluation)}</td></tr>
+    <tr><td>一言</td><td>${escapeHtml(replay)}</td></tr>
+    ${hint ? `<tr><td>次回ヒント</td><td>${escapeHtml(hint)}</td></tr>` : ""}
+  </table>`;
 
   return `<div class="endcard">
     <h1 class="${titleClass}">${titleText}</h1>
@@ -2833,7 +3412,7 @@ function buildEndCard(kind, reason) {
       <tr><td>勇者</td><td>${escapeHtml(player.name)} (${player.cls})</td></tr>
       <tr><td>到達階 / Lv</td><td>B${player.floor}F / Lv${player.level}</td></tr>
       <tr><td>HP</td><td>${player.hp}/${player.max_hp}</td></tr>
-      <tr><td>装備</td><td>${player.weapon || "—"} / ${player.armor || "—"}</td></tr>
+      <tr><td>装備</td><td>${escapeHtml(equipLabel("weapon"))} / ${escapeHtml(equipLabel("armor"))}</td></tr>
       <tr><td>所持金</td><td>${player.gold}G</td></tr>
       <tr><td>撃破数</td><td>${runStats.kills}体</td></tr>
       ${depthRow}
@@ -2841,8 +3420,12 @@ function buildEndCard(kind, reason) {
       <tr><td>累計獲得G</td><td>${runStats.totalGoldGained}G</td></tr>
       <tr><td>総合スコア</td><td class="score">${score}</td></tr>
     </table>
+    ${adventureBlock}
+    ${miniBlock}
     ${growthBlock}
     ${skillsBlock}
+    ${blessingBlock}
+    ${forgeBlock}
     ${classEventBlock}
     ${mmBlock}
     ${titleBlock}
