@@ -482,7 +482,7 @@ input.text-input:focus { border-color: var(--accent); }
 // ====================================================================
 const FINAL_FLOOR = 20;
 const BOSS_FLOORS = new Set([5, 10, 15, 20]);
-const APP_VERSION = "v20260510-rogue-plus4";
+const APP_VERSION = "v20260510-rogue-plus5";
 // 開発確認用：URLに ?debug=1 が付いているときだけ有効化する。
 // 通常プレイでは false 固定で、UIも出ない。
 const DEBUG_MODE = (() => {
@@ -1038,6 +1038,8 @@ function newRunStats(mode = "story") {
     // 深層探索モード関連
     depthBossKills: 0, // この冒険で撃破した深層ボス数
     milestoneFloors: {}, // 節目イベント発火済み floor のセット {31:true,41:true,...}
+    // 魔導士：泉/祭壇で悪い結果を1冒険1回だけ叡智で払いのける救済フラグ
+    mageEventGuardUsed: false,
     // ビルド・鍛冶・祝福
     blessingChoices: [],
     blessingCount: 0,
@@ -1092,6 +1094,7 @@ function normalizeRunStats(rs) {
   if (typeof out.merchantIntroAvailable !== "boolean") out.merchantIntroAvailable = false;
   if (typeof out.depthBossKills !== "number") out.depthBossKills = 0;
   if (!out.milestoneFloors || typeof out.milestoneFloors !== "object") out.milestoneFloors = {};
+  if (typeof out.mageEventGuardUsed !== "boolean") out.mageEventGuardUsed = false;
   [
     "classFeatureTriggers",
     "warriorCounters", "warriorDefends", "warriorBossKills",
@@ -1471,7 +1474,11 @@ function hasForgeTarget(slot) {
 }
 function forgeCost(slot, discount = 1) {
   const next = getEnhance(slot) + 1;
-  return Math.max(1, Math.floor((FORGE_COSTS[next] || 9999) * discount));
+  const base = FORGE_COSTS[next] || 9999;
+  let mult = discount;
+  // 盗賊：鍛冶屋費用 -10%（既存のイベント側 discount と乗算で適用）
+  if (player && player.cls === "盗賊") mult *= 0.9;
+  return Math.max(1, Math.floor(base * mult));
 }
 function canEnhance(slot, discount = 1, free = false) {
   if (!player || !hasForgeTarget(slot)) return false;
@@ -1824,7 +1831,9 @@ async function combat(m, canFlee = true) {
       addRunStat("defendingTimes");
       if (player.cls === "戦士") {
         addClassFeatureStat("warriorDefends");
-        tell("戦士の構え！", "shop");
+        // HP残量が3割以下の時は粘りを強調するログに切替
+        const lowHp = player.max_hp > 0 && (player.hp / player.max_hp) <= 0.30;
+        tell(lowHp ? "戦士の構え！ 食いしばる！" : "戦士の構え！", "shop");
       } else {
         tell("構えを取った。", "shop");
       }
@@ -1855,6 +1864,13 @@ async function combat(m, canFlee = true) {
         if (armorBonus > 0) { runStats.equipmentSynergyTriggers += 1; tell("革の鎧が音を抑え、滑るように離脱した。", "shop"); }
         tell(`${m.name} を撒いて逃げ切った！`, "shop");
         addRunStat("fleeSuccessCount");
+        // 盗賊：逃げ際に30%で隠し持ちから5〜15Gを抜き取る（小さな副収入）
+        if (isRogue && Math.random() < 0.30) {
+          const g = randInt(5, 15);
+          addGold(player, g);
+          addClassFeatureStat("rogueDiscounts");
+          tell(`盗賊の交渉術！ 隠し持ちから ${g}G を拾った。`, "gold");
+        }
         saveGame();
         return false;
       }
@@ -1900,9 +1916,12 @@ async function combat(m, canFlee = true) {
         }
       }
       // 戦士の反撃：防御選択中・敵が攻撃を当てた直後
-      // ベース30% + 反撃術Lv*10%（最大70%）、ダメは通常攻撃の50%
+      // ベース30% + 反撃術Lv*10%（最大70%）、ボス戦時は更に+5%（戦士の粘り）。
+      // 上限0.80でクランプして暴走を防ぐ。ダメは通常攻撃の50%。
       if (defending && player.cls === "戦士" && m.hp > 0 && player.hp > 0) {
-        const cRate = 0.30 + Math.min(0.40, growthLv("反撃術") * 0.10);
+        const baseCRate = 0.30 + Math.min(0.40, growthLv("反撃術") * 0.10);
+        const bossBonus = isBossBattleFloor(player.floor) ? 0.05 : 0;
+        const cRate = Math.min(0.80, baseCRate + bossBonus);
         if (Math.random() < cRate) {
           let cdmg = Math.max(1, Math.floor(calcDamage(pAtk(player), m.defense) * 0.5));
           // 戦士+鋼の剣：反撃ダメ +2
@@ -2189,10 +2208,17 @@ async function eventShrine() {
       tell("祭壇から100Gが転がり出た。だが背筋が冷える…", "gold");
       if (Math.random() < 0.5) { addEffect(player, "poison", 8); setLastDamage("神罰"); tell("呪いで毒に侵された！", "danger"); }
     } else {
-      tell("天罰！ 雷が落ちた！", "danger");
-      player.hp = Math.max(1, player.hp - 20);
-      setLastDamage("神罰");
-      addEffect(player, "poison", 6);
+      // 魔導士の叡智ガード：1冒険1回 / 25%で天罰を逃れる
+      if (player.cls === "魔導士" && !runStats.mageEventGuardUsed && Math.random() < 0.25) {
+        runStats.mageEventGuardUsed = true;
+        addClassFeatureStat("mageEventInsights");
+        tell("魔導士の叡智！ 雷を読み、身を翻した。", "shop");
+      } else {
+        tell("天罰！ 雷が落ちた！", "danger");
+        player.hp = Math.max(1, player.hp - 20);
+        setLastDamage("神罰");
+        addEffect(player, "poison", 6);
+      }
     }
   }
 }
@@ -2236,6 +2262,13 @@ async function eventFountain() {
     tell("防御力が永続的に2上昇した！", "heal");
   }
   else if (r < t4) {
+    // 魔導士の叡智ガード：1冒険1回 / 25%で悪い結果を払いのける
+    if (isMage && !runStats.mageEventGuardUsed && Math.random() < 0.25) {
+      runStats.mageEventGuardUsed = true;
+      addClassFeatureStat("mageEventInsights");
+      tell("魔導士の叡智！ 泉の毒気を払いのけた。", "shop");
+      return;
+    }
     let l = randInt(5, 15);
     // 魔導士+聖なる鎧：泉の悪効果ダメ -50%
     if (isMage && player.armor === "聖なる鎧") {
@@ -2248,6 +2281,13 @@ async function eventFountain() {
     tell(`水は腐っていた！ ${l} のダメージ。`, "danger");
   }
   else {
+    // こちらの最悪枝でも叡智ガードが残っていれば払う
+    if (isMage && !runStats.mageEventGuardUsed && Math.random() < 0.25) {
+      runStats.mageEventGuardUsed = true;
+      addClassFeatureStat("mageEventInsights");
+      tell("魔導士の叡智！ 呪詛が霧散した。", "shop");
+      return;
+    }
     let down = 5;
     if (isMage && player.armor === "聖なる鎧") {
       down = 3;
@@ -2333,6 +2373,8 @@ async function eventForge(discount = 1, title = "鍛冶屋") {
     ? "煤けた炉がまだ熱を帯びている。通常より少し安く鍛えられそうだ。"
     : "旅の鍛冶屋が小さな炉を据えている。\n「金さえあれば、今の装備を少しだけ強くできるぞ」";
   tellEvent(title, body, "shop");
+  // 盗賊：鍛冶屋では値引きが効くことを短くログで伝える
+  if (player.cls === "盗賊") tell("盗賊の交渉術！ 値引き価格で鍛えてもらえる。", "shop");
   const idx = await ask([
     forgeOption("weapon", discount),
     forgeOption("armor", discount),
