@@ -482,7 +482,7 @@ input.text-input:focus { border-color: var(--accent); }
 // ====================================================================
 const FINAL_FLOOR = 20;
 const BOSS_FLOORS = new Set([5, 10, 15, 20]);
-const APP_VERSION = "v20260510-rogue-plus5";
+const APP_VERSION = "v20260510-rogue-plus6";
 // 開発確認用：URLに ?debug=1 が付いているときだけ有効化する。
 // 通常プレイでは false 固定で、UIも出ない。
 const DEBUG_MODE = (() => {
@@ -664,6 +664,30 @@ const MINI_GOAL_REWARDS = [
   () => ({ type: "item", item: "魔法の巻物", label: "巻物" }),
 ];
 
+// === 記憶効果（Legendary Memory）：その冒険中のみ有効、行動に反応する特殊効果 ===
+// plus5の職業補正と衝突しないよう、効果は控えめに設計。
+// 上限: 本編 story=1個 / 深層 endless=2個。
+const MEMORY_EFFECTS = [
+  { id: "counter_strike", name: "反撃の記憶",   desc: "カウンター発動時、追加ダメージを与える", classHint: "戦士" },
+  { id: "iron_wall",      name: "鉄壁の記憶",   desc: "防御時の被ダメージをさらに -1",          classHint: "戦士" },
+  { id: "swift_flee",     name: "遁走の記憶",   desc: "逃走成功時にHPを2回復",                  classHint: "盗賊" },
+  { id: "merchant_eye",   name: "商才の記憶",   desc: "通常商人の消耗品購入で25%・5〜10G返却", classHint: "盗賊" },
+  { id: "incantation",    name: "詠唱の記憶",   desc: "巻物使用時、30%でHPを3回復",             classHint: "魔導士" },
+  { id: "insight",        name: "洞察の記憶",   desc: "知識/魔法系の良結果でHP+2かG+10",        classHint: "魔導士" },
+];
+const MEMORY_LIMIT = { story: 1, endless: 2 };
+
+// === エリート修飾語：通常敵に低確率で付ける ===
+// ボスには付けない。1F〜2Fでは出ない。
+const ELITE_AFFIXES = [
+  { id: "iron",    name: "鉄壁の",     hpMul: 1.30, atkMul: 1.00, defAdd: 2, expMul: 1.0, goldMul: 1.5 },
+  { id: "frenzy",  name: "狂暴な",     hpMul: 1.10, atkMul: 1.20, defAdd: 0, expMul: 1.5, goldMul: 1.0 },
+  { id: "venom",   name: "毒霧の",     hpMul: 1.15, atkMul: 1.05, defAdd: 0, expMul: 1.0, goldMul: 1.2,
+    addTags: ["poison"], extraDrops: [["毒消し草", 0.50], ["ポーション", 0.30]] },
+  { id: "treasure",name: "財宝持ちの", hpMul: 1.10, atkMul: 1.00, defAdd: 0, expMul: 1.0, goldMul: 2.5 },
+  { id: "depth",   name: "深層の",     hpMul: 1.40, atkMul: 1.15, defAdd: 2, expMul: 1.5, goldMul: 2.0, depthOnly: true },
+];
+
 const BLESSINGS = [
   { id: "sword", name: "剣の記憶", desc: "攻撃 +1", weight: 10 },
   { id: "shield", name: "盾の記憶", desc: "防御 +1", weight: 10 },
@@ -828,6 +852,11 @@ function recordRunResult(kind, score, reason) {
     growthSummary: (player.classUpgrades && Object.keys(player.classUpgrades).length > 0)
       ? Object.entries(player.classUpgrades).map(([k,v]) => `${k} Lv${v}`).join(" / ") : "",
     memoryMerchantPurchases: runStats ? (runStats.memoryMerchantPurchases || []) : [],
+    // plus6
+    memoryEffectsOwned: (player && Array.isArray(player.memoryEffects)) ? player.memoryEffects.slice() : [],
+    eliteEncounters: runStats ? (runStats.eliteEncounters || 0) : 0,
+    eliteKills:      runStats ? (runStats.eliteKills || 0) : 0,
+    eliteLootCount:  runStats ? (runStats.eliteLootCount || 0) : 0,
     memoryMerchantSpent: mmSpent,
     blessingChoices: runStats ? (runStats.blessingChoices || []) : [],
     blessingCount: runStats ? (runStats.blessingCount || 0) : 0,
@@ -1040,6 +1069,13 @@ function newRunStats(mode = "story") {
     milestoneFloors: {}, // 節目イベント発火済み floor のセット {31:true,41:true,...}
     // 魔導士：泉/祭壇で悪い結果を1冒険1回だけ叡智で払いのける救済フラグ
     mageEventGuardUsed: false,
+    // === 記憶効果＆エリート関連 (plus6) ===
+    memoryEffects: [],         // [{id,name,floor,source}] 取得履歴
+    eliteEncounters: 0,        // エリート遭遇数
+    eliteKills: 0,             // エリート撃破数
+    eliteLootChoices: [],      // [{id,label,floor}]
+    eliteLootCount: 0,         // 戦利品3択を実際に選んだ回数
+    eliteLootMemoryCount: 0,   // 戦利品3択で記憶効果を選んだ回数
     // ビルド・鍛冶・祝福
     blessingChoices: [],
     blessingCount: 0,
@@ -1095,6 +1131,13 @@ function normalizeRunStats(rs) {
   if (typeof out.depthBossKills !== "number") out.depthBossKills = 0;
   if (!out.milestoneFloors || typeof out.milestoneFloors !== "object") out.milestoneFloors = {};
   if (typeof out.mageEventGuardUsed !== "boolean") out.mageEventGuardUsed = false;
+  // plus6: 記憶効果・エリート
+  if (!Array.isArray(out.memoryEffects)) out.memoryEffects = [];
+  if (typeof out.eliteEncounters !== "number") out.eliteEncounters = 0;
+  if (typeof out.eliteKills !== "number") out.eliteKills = 0;
+  if (!Array.isArray(out.eliteLootChoices)) out.eliteLootChoices = [];
+  if (typeof out.eliteLootCount !== "number") out.eliteLootCount = 0;
+  if (typeof out.eliteLootMemoryCount !== "number") out.eliteLootMemoryCount = 0;
   [
     "classFeatureTriggers",
     "warriorCounters", "warriorDefends", "warriorBossKills",
@@ -1125,6 +1168,9 @@ function normalizeRunStats(rs) {
 function normalizePlayer(p) {
   if (!p || typeof p !== "object") return p;
   if (!p.classUpgrades || typeof p.classUpgrades !== "object") p.classUpgrades = {};
+  if (!Array.isArray(p.memoryEffects)) p.memoryEffects = [];
+  // 不正なIDを除去（旧セーブ・改竄対策）
+  p.memoryEffects = p.memoryEffects.filter(id => typeof id === "string" && MEMORY_EFFECTS.some(e => e.id === id));
   if (!Array.isArray(p.inventory)) p.inventory = [];
   p.inventory = p.inventory.filter(it => typeof it === "string" && ITEMS[it]);
   if (p.weapon && (!ITEMS[p.weapon] || ITEMS[p.weapon].category !== "weapon")) p.weapon = null;
@@ -1258,6 +1304,7 @@ function newPlayer(name, cls) {
     weaponEnhance: 0, armorEnhance: 0,
     effects: [],
     classUpgrades: {},      // {鉄壁:N, 反撃術:N, ...} 取得済みLv
+    memoryEffects: [],      // この冒険中に取得した記憶効果のIDリスト
   };
   for (const it of [...p.inventory]) {
     const info = ITEMS[it];
@@ -1350,6 +1397,95 @@ function applyDamage(p, amount, source) {
   }
   p.hp = Math.max(0, p.hp - amount);
   return amount;
+}
+
+// ---- 記憶効果ヘルパ (plus6) ----
+function memoryLimit() {
+  const mode = (player && player.mode === "endless") ? "endless" : "story";
+  return MEMORY_LIMIT[mode];
+}
+function hasMemory(id) {
+  if (!player || !Array.isArray(player.memoryEffects)) return false;
+  return player.memoryEffects.indexOf(id) >= 0;
+}
+function canAddMemory() {
+  if (!player) return false;
+  const arr = player.memoryEffects || [];
+  return arr.length < memoryLimit();
+}
+function memoryDef(id) {
+  return MEMORY_EFFECTS.find(e => e.id === id) || null;
+}
+function addMemoryEffect(id, source = "祝福") {
+  const def = memoryDef(id);
+  if (!def || !canAddMemory() || hasMemory(id)) return false;
+  player.memoryEffects = player.memoryEffects || [];
+  player.memoryEffects.push(id);
+  if (runStats) {
+    runStats.memoryEffects = runStats.memoryEffects || [];
+    runStats.memoryEffects.push({ id: def.id, name: def.name, floor: player.floor, source });
+  }
+  tell(`✦ 迷宮の記憶があなたに宿った。${def.name}！`, "gold");
+  return true;
+}
+// 知識/魔法系イベントの良結果で「洞察の記憶」を試みる
+function triggerInsightMemory() {
+  if (!hasMemory("insight")) return;
+  if (Math.random() < 0.5) {
+    const g = heal(player, 2);
+    if (g > 0) tell("洞察の記憶が小さな恵みを見つけた！ (HP+2)", "shop");
+  } else {
+    addGold(player, 10);
+    tell("洞察の記憶が小さな恵みを見つけた！ (+10G)", "shop");
+  }
+}
+
+// ---- エリート敵ヘルパ (plus6) ----
+function rollEliteAffix() {
+  if (!player || isBossBattleFloor(player.floor)) return null;
+  // 1F〜2Fでは出さない（理不尽防止）
+  if (player.floor <= 2) return null;
+  const isEndless = isEndlessMode();
+  let rate = isEndless ? 0.09 : 0.05;
+  const diff = currentDifficulty();
+  if (diff === "challenge") rate += 0.02;
+  else if (diff === "story") rate = Math.max(0.02, rate - 0.02);
+  if (Math.random() >= rate) return null;
+  const pool = ELITE_AFFIXES.filter(a => !a.depthOnly || isEndless);
+  return pool.length ? choice(pool) : null;
+}
+function maybeApplyElite(m) {
+  if (!m) return m;
+  if (window.__debugForceElite) {
+    window.__debugForceElite = false;
+    const isEndless = isEndlessMode();
+    const pool = ELITE_AFFIXES.filter(a => !a.depthOnly || isEndless);
+    const affix = pool.length ? choice(pool) : null;
+    if (affix) applyEliteAffix(m, affix);
+    return m;
+  }
+  const affix = rollEliteAffix();
+  if (affix) applyEliteAffix(m, affix);
+  return m;
+}
+function applyEliteAffix(m, affix) {
+  if (!m || !affix) return;
+  m.elite = affix.id;
+  m.eliteAffix = affix;
+  m.name = affix.name + m.name;
+  m.hp  = Math.max(1, Math.floor(m.hp  * (affix.hpMul  || 1)));
+  m.atk = Math.max(1, Math.floor(m.atk * (affix.atkMul || 1)));
+  m.defense = (m.defense || 0) + (affix.defAdd || 0);
+  m.exp  = Math.max(1, Math.floor(m.exp  * (affix.expMul  || 1)));
+  m.gold = Math.max(1, Math.floor(m.gold * (affix.goldMul || 1)));
+  if (affix.addTags && Array.isArray(affix.addTags)) {
+    m.tags = (m.tags || []).slice();
+    for (const t of affix.addTags) if (m.tags.indexOf(t) < 0) m.tags.push(t);
+  }
+  if (affix.extraDrops && Array.isArray(affix.extraDrops)) {
+    m.drops = (m.drops || []).concat(affix.extraDrops);
+  }
+  if (runStats) runStats.eliteEncounters = (runStats.eliteEncounters || 0) + 1;
 }
 
 // ---- 強化適用（新規開始時に1度だけ呼ぶ） ----
@@ -1535,6 +1671,13 @@ function renderStatus() {
   const mg = (runStats && runStats.miniGoal)
     ? `<div class="mini-goal">${escapeHtml(miniGoalText())}</div>`
     : "";
+  // plus6: 記憶効果（あれば1〜2行に収まる）
+  const memArr = (player.memoryEffects || []).map(id => {
+    const def = memoryDef(id); return def ? def.name : id;
+  });
+  const me = memArr.length
+    ? `<div class="effects" style="color:var(--magenta); grid-column: span 4;">記憶: ${escapeHtml(memArr.join(" / "))}</div>`
+    : "";
 
   $statusGrid.innerHTML = `
     <span class="lbl">HP</span><span class="val" style="color:${hpColor}">${player.hp}/${player.max_hp}</span>
@@ -1545,6 +1688,7 @@ function renderStatus() {
     <span class="lbl">防具</span><span class="val">${escapeHtml(equipLabel("armor"))}</span>
     <span class="lbl">所持品</span><span class="val" style="grid-column: span 3; font-size:11px;">${player.inventory.length ? compactInv(player.inventory) : "空"}</span>
     <div class="hp-bar"><div style="width:${hpRatio*100}%; background:${hpColor};"></div></div>
+    ${me}
     ${mg}
     ${fx}
   `;
@@ -1731,6 +1875,11 @@ function useItem(p, item, inCombat = false, target = null, canFlee = true) {
       }
       if (isMage) tail += "  魔導士の詠唱が巻物の力を高めた！";
       if (conserve) tail += "  巻物は崩れずに残った。";
+      // 記憶効果「詠唱の記憶」: 30% で HP+3（巻物消費・温存とは独立）
+      if (hasMemory("incantation") && Math.random() < 0.30) {
+        const g = heal(p, 3);
+        if (g > 0) tail += "  詠唱の記憶が巻物に力を添えた！ (HP+3)";
+      }
       return [true, `魔法の巻物が炸裂！ ${target.name} に ${power} のダメージ！${tail}`];
     }
     case "level_up": {
@@ -1846,6 +1995,11 @@ async function combat(m, canFlee = true) {
         if (player.cls === "盗賊") { addClassFeatureStat("rogueEscapes"); tell("盗賊の足さばき！", "shop"); }
         tell(`${m.name} を撒いて逃げ切った！`, "shop");
         addRunStat("fleeSuccessCount");
+        // 記憶効果「遁走の記憶」: 逃走成功でHP+2
+        if (hasMemory("swift_flee")) {
+          const g = heal(player, 2);
+          if (g > 0) tell("遁走の記憶が息を整えた！ (HP+2)", "shop");
+        }
         saveGame();
         return false;
       }
@@ -1870,6 +2024,11 @@ async function combat(m, canFlee = true) {
           addGold(player, g);
           addClassFeatureStat("rogueDiscounts");
           tell(`盗賊の交渉術！ 隠し持ちから ${g}G を拾った。`, "gold");
+        }
+        // 記憶効果「遁走の記憶」: 逃走成功でHP+2
+        if (hasMemory("swift_flee")) {
+          const g = heal(player, 2);
+          if (g > 0) tell("遁走の記憶が息を整えた！ (HP+2)", "shop");
         }
         saveGame();
         return false;
@@ -1896,6 +2055,12 @@ async function combat(m, canFlee = true) {
             runStats.equipmentSynergyTriggers += 1;
           }
           tell("戦士の構えが衝撃を受け止めた。", "shop");
+        }
+        // 記憶効果「鉄壁の記憶」：防御時の被ダメ -1（控えめ、無敵化しない）
+        if (hasMemory("iron_wall")) {
+          const before = edmg;
+          edmg = Math.max(1, edmg - 1);
+          if (edmg < before) tell("鉄壁の記憶が守りを固めた！", "shop");
         }
         // ボス戦は最低2ダメ保証（防御無双による作業化防止）
         if (isBossBattleFloor(player.floor)) edmg = Math.max(2, edmg);
@@ -1928,6 +2093,12 @@ async function combat(m, canFlee = true) {
           if (player.weapon === "鋼の剣") {
             cdmg += 2;
             runStats.equipmentSynergyTriggers += 1;
+          }
+          // 記憶効果「反撃の記憶」：1〜3 or floor(level/3) の追加ダメ（控えめ）
+          if (hasMemory("counter_strike")) {
+            const memBonus = Math.max(1, Math.min(3, Math.floor(player.level / 3)));
+            cdmg += memBonus;
+            tell("反撃の記憶が刃を押し返した！", "shop");
           }
           m.hp -= cdmg;
           trackDamageDealt(cdmg);
@@ -1965,7 +2136,10 @@ async function eventMonster() {
     tell("…なにか強い気配がする。", "danger");
   }
   const m = makeMonster(choice(pool));
-  tellEvent("モンスター", `${choice(EVENT_FLAVOR.monster)}\n${m.name} と遭遇した！`, "combat");
+  // plus6: 通常敵に低確率でエリート修飾語を付与
+  maybeApplyElite(m);
+  const eliteTag = m.elite ? "✦ エリート" : "モンスター";
+  tellEvent(eliteTag, `${choice(EVENT_FLAVOR.monster)}\n${m.name} と遭遇した！`, "combat");
   const idx = await ask(["戦う", { label: "様子を見て逃げる", desc: "階層が深いほど低下" }]);
   if (idx === 1) {
     const chance = Math.max(0.25, 0.7 - player.floor * 0.02);
@@ -1976,7 +2150,13 @@ async function eventMonster() {
     }
     tell("気付かれた！", "danger");
   }
-  await combat(m);
+  const won = await combat(m);
+  // plus6: エリート撃破時の戦利品3択
+  if (won && m.elite) {
+    if (runStats) runStats.eliteKills = (runStats.eliteKills || 0) + 1;
+    tell("✦ エリートを撃破した！", "shop");
+    await maybeOfferEliteLoot(m);
+  }
 }
 
 async function eventTreasure() {
@@ -2164,6 +2344,12 @@ async function eventMerchant() {
       addClassFeatureStat("rogueDiscounts");
       tell("盗賊の目利き！", "shop");
     }
+    // 記憶効果「商才の記憶」: 消耗品購入で25%・5〜10G 返却（鍛冶屋には非適用）
+    if (hasMemory("merchant_eye") && ITEMS[item].category === "consumable" && Math.random() < 0.25) {
+      const refund = Math.min(price, randInt(5, 10));
+      addGold(player, refund);
+      tell(`商才の記憶が小銭を呼び戻した！ (+${refund}G)`, "shop");
+    }
     // 商人の紹介状は初購入で消費
     if (runStats.merchantIntroAvailable) {
       runStats.merchantIntroAvailable = false;
@@ -2195,6 +2381,8 @@ async function eventShrine() {
         tell("魔導士の叡智が道を開いた！ 最大HPが3上昇した。", "heal");
       }
     }
+    // 記憶効果「洞察の記憶」: 祈りの良結果に小ボーナス
+    triggerInsightMemory();
   } else if (idx === 1) {
     const cost = Math.max(20, Math.floor(player.gold / 10));
     if (player.gold < cost) { tell("捧げ物が足りなかった…", "dim"); return; }
@@ -2250,16 +2438,19 @@ async function eventFountain() {
     player.max_hp += 10; player.hp = player.max_hp;
     if (isMage) { addClassFeatureStat("mageEventInsights"); tell("魔導士の叡智が道を開いた！", "shop"); }
     tell("最大HPが10上昇した！", "heal");
+    triggerInsightMemory();
   }
   else if (r < t2) {
     player.base_atk += 2;
     if (isMage) { addClassFeatureStat("mageEventInsights"); tell("魔導士の叡智が道を開いた！", "shop"); }
     tell("攻撃力が永続的に2上昇した！", "heal");
+    triggerInsightMemory();
   }
   else if (r < t3) {
     player.base_def += 2;
     if (isMage) { addClassFeatureStat("mageEventInsights"); tell("魔導士の叡智が道を開いた！", "shop"); }
     tell("防御力が永続的に2上昇した！", "heal");
+    triggerInsightMemory();
   }
   else if (r < t4) {
     // 魔導士の叡智ガード：1冒険1回 / 25%で悪い結果を払いのける
@@ -2323,6 +2514,7 @@ async function eventRiddle() {
     if (player.cls === "魔導士") { addClassFeatureStat("mageEventInsights"); tell("魔導士の叡智が道を開いた！", "shop"); }
     tell(`正解！ ${g}G と経験値+${expGain} を得た。${eichi ? " (叡智の加護)" : ""} ` + msgs.join(" "), "gold");
     unlockAch("riddle_master");
+    triggerInsightMemory();
   } else {
     tell(`不正解！ 答えは「${r.a}」だった。スフィンクスが襲いかかる！`, "danger");
     const m = makeMonster(player.floor < 10 ? "ダークエルフ" : "リッチ");
@@ -2446,17 +2638,43 @@ function applyBlessing(b) {
   return "";
 }
 async function offerBlessingChoice(sourceLabel) {
-  const options = blessingOptions(isEndlessMode());
+  const isEndless = isEndlessMode();
+  const options = blessingOptions(isEndless);
   if (options.length === 0) return;
+  // plus6: 記憶効果の上限に空きがあれば、低確率で1枠を記憶効果候補に置換
+  // 本編 20% / 深層 40%（深層は出やすめ）
+  if (canAddMemory()) {
+    const memoryRate = isEndless ? 0.40 : 0.20;
+    if (Math.random() < memoryRate) {
+      const owned = player.memoryEffects || [];
+      const candidates = MEMORY_EFFECTS.filter(e => owned.indexOf(e.id) < 0);
+      if (candidates.length > 0) {
+        const def = choice(candidates);
+        // 末尾の祝福を記憶効果に置換
+        options[options.length - 1] = {
+          id: "memory:" + def.id,
+          name: `記憶効果: ${def.name}`,
+          desc: def.desc,
+          isMemory: true,
+          memoryDef: def,
+        };
+      }
+    }
+  }
   tellEvent("✦ 記憶の祝福", `${sourceLabel}の記憶が形を成す。1つ選べ。`, "shop");
   const idx = await ask(options.map(b => ({ label: b.name, desc: b.desc })));
   const chosen = options[idx];
-  const result = applyBlessing(chosen);
+  let result = "";
+  if (chosen.isMemory) {
+    addMemoryEffect(chosen.memoryDef.id, sourceLabel);
+  } else {
+    result = applyBlessing(chosen);
+  }
   if (runStats) {
     runStats.blessingChoices.push({ id: chosen.id, name: chosen.name, floor: player.floor, source: sourceLabel });
     addRunStat("blessingCount", 1, false);
   }
-  tell(`${chosen.name}を選んだ。${result}`, "gold");
+  if (result) tell(`${chosen.name}を選んだ。${result}`, "gold");
   renderStatus();
   saveGame();
 }
@@ -2485,6 +2703,65 @@ async function offerMinorDepthBlessing(sourceLabel) {
   renderStatus();
   saveGame();
 }
+
+// plus6: エリート撃破後の戦利品3択
+function buildEliteLootPool(m) {
+  const pool = [];
+  const goldAmt = randInt(30, 60);
+  pool.push({ id: "loot_gold",   label: `GOLD +${goldAmt}`, apply: () => { addGold(player, goldAmt); return `${goldAmt}G を得た。`; } });
+  pool.push({ id: "loot_potion", label: "ポーション ×1", apply: () => { player.inventory.push("ポーション"); return "ポーションを得た。"; } });
+  pool.push({ id: "loot_smoke",  label: "煙玉 ×1",       apply: () => { player.inventory.push("煙玉"); return "煙玉を得た。"; } });
+  pool.push({ id: "loot_scroll", label: "魔法の巻物 ×1",  apply: () => { player.inventory.push("魔法の巻物"); return "魔法の巻物を得た。"; } });
+  // 鍛冶上限を尊重して武具+1（出せる時のみ候補）
+  if (canEnhance("weapon", 1, true)) pool.push({ id: "loot_forge_w", label: "武器 +1（鍛冶）", apply: () => { enhanceEquipment("weapon", { free: true, source: "elite_loot" }); return `${equipLabel("weapon")} に強化された。`; } });
+  if (canEnhance("armor", 1, true))  pool.push({ id: "loot_forge_a", label: "防具 +1（鍛冶）", apply: () => { enhanceEquipment("armor",  { free: true, source: "elite_loot" }); return `${equipLabel("armor")} に強化された。`; } });
+  // 小祝福
+  pool.push({ id: "loot_atk", label: "攻撃 +1",    apply: () => { player.base_atk += 1; return "攻撃が1上がった。"; } });
+  pool.push({ id: "loot_def", label: "防御 +1",    apply: () => { player.base_def += 1; return "防御が1上がった。"; } });
+  pool.push({ id: "loot_hp",  label: "最大HP +3",  apply: () => { player.max_hp += 3; player.hp = Math.min(player.max_hp, player.hp + 3); return "最大HPが3上がった。"; } });
+  // 記憶効果（上限に空きがある時のみ）
+  if (canAddMemory()) {
+    const owned = player.memoryEffects || [];
+    const candidates = MEMORY_EFFECTS.filter(e => owned.indexOf(e.id) < 0);
+    if (candidates.length > 0) {
+      const def = choice(candidates);
+      pool.push({
+        id: "loot_memory:" + def.id,
+        label: `記憶効果: ${def.name}`,
+        apply: () => { addMemoryEffect(def.id, "エリート戦利品"); return ""; },
+        isMemory: true,
+      });
+    }
+  }
+  return pool;
+}
+async function maybeOfferEliteLoot(m) {
+  const isEndless = isEndlessMode();
+  const baseRate = isEndless ? 0.60 : 0.40;
+  const depthBonus = (m && m.elite === "depth") ? 0.15 : 0;
+  if (Math.random() >= (baseRate + depthBonus)) return;
+  const pool = buildEliteLootPool(m);
+  const opts = [];
+  while (opts.length < 3 && pool.length > 0) {
+    const i = rand(pool.length);
+    opts.push(pool.splice(i, 1)[0]);
+  }
+  if (opts.length === 0) return;
+  tellEvent("✦ エリート戦利品", "倒したエリートが落とした記憶。1つ選べ。", "shop");
+  const idx = await ask(opts.map(o => ({ label: o.label })));
+  const chosen = opts[idx];
+  const result = chosen.apply();
+  if (runStats) {
+    runStats.eliteLootChoices = runStats.eliteLootChoices || [];
+    runStats.eliteLootChoices.push({ id: chosen.id, label: chosen.label, floor: player.floor });
+    runStats.eliteLootCount = (runStats.eliteLootCount || 0) + 1;
+    if (chosen.isMemory) runStats.eliteLootMemoryCount = (runStats.eliteLootMemoryCount || 0) + 1;
+  }
+  if (result) tell(result, "gold");
+  renderStatus();
+  saveGame();
+}
+
 async function eventDepthCampfire() {
   tellEvent("深層の焚き火", "誰が残したのか、青白い火が静かに燃えている。", "shop");
   const idx = await ask([
@@ -2934,6 +3211,7 @@ async function eventLibrary() {
       tell(`魔術書から知識を得て、魔法の巻物 ×${n} を作り出した！`, "gold");
       unlockAch("mage_archivist");
       checkClassEventMaster();
+      triggerInsightMemory();
     } else if (r < 0.88) {
       tell("魔術書の文字は普通の古い記述にすぎなかった。", "dim");
     } else {
@@ -2955,6 +3233,7 @@ async function eventLibrary() {
     }
     unlockAch("mage_archivist");
     checkClassEventMaster();
+    triggerInsightMemory();
   }
 }
 
@@ -3396,6 +3675,25 @@ function buildReplayLine() {
   const stage = isEndless ? "深層" : "迷宮";
   const forged = (runStats.forgeWeaponCount || 0) + (runStats.forgeArmorCount || 0);
   const blessed = (runStats.blessingChoices || []).length;
+  // plus6: 記憶効果やエリート撃破による上書きを優先
+  const owned = (player.memoryEffects || []);
+  if (owned.length > 0) {
+    const def = memoryDef(owned[owned.length - 1]);
+    const name = def ? def.name : owned[owned.length - 1];
+    if (player.cls === "戦士" && (owned.includes("counter_strike") || owned.includes("iron_wall"))) {
+      return `戦士は${name}を宿し、${stage}の敵を押し返した。`;
+    }
+    if (player.cls === "盗賊" && (owned.includes("merchant_eye") || owned.includes("swift_flee"))) {
+      return `盗賊は${name}を頼りに、${stage}を駆け抜けた。`;
+    }
+    if (player.cls === "魔導士" && (owned.includes("incantation") || owned.includes("insight"))) {
+      return `魔導士は${name}をまとい、${stage}の力を引き出した。`;
+    }
+    return `${player.cls}は${name}を抱え、${stage}を歩んだ。`;
+  }
+  if ((runStats.eliteKills || 0) >= 3) {
+    return `数々の強敵を退け、その足跡は深く刻まれた。`;
+  }
   if (player.cls === "戦士") {
     if (forged >= 2) return `戦士は剣を鍛え、${stage}の影に挑んだ。`;
     if ((runStats.warriorCounters || 0) >= 5) return `戦士は反撃を磨き、迫る牙を退けた。`;
@@ -3535,6 +3833,31 @@ function buildEndCard(kind, reason) {
     ? `<div class="badge-list" style="margin-top:8px;"><span class="badge" style="font-size:13px;">称号: ${escapeHtml(title)}</span></div>`
     : "";
 
+  // plus6: 記憶効果ブロック（取得0件なら非表示）
+  let memoryBlock = "";
+  const memList = (runStats.memoryEffects || []);
+  const ownedIds = (player.memoryEffects || []);
+  if (memList.length > 0 || ownedIds.length > 0) {
+    const lines = ownedIds.map(id => {
+      const def = memoryDef(id);
+      const name = def ? def.name : id;
+      const desc = def ? def.desc : "";
+      return `<tr><td>${escapeHtml(name)}</td><td>${escapeHtml(desc)}</td></tr>`;
+    }).join("");
+    memoryBlock = `<h3>✦ 記憶効果</h3><table>${lines}</table>`;
+  }
+  // plus6: エリートブロック（遭遇0件なら非表示）
+  let eliteBlock = "";
+  const eEnc = runStats.eliteEncounters || 0;
+  const eKill = runStats.eliteKills || 0;
+  const eLoot = runStats.eliteLootCount || 0;
+  if (eEnc > 0 || eKill > 0 || eLoot > 0) {
+    eliteBlock = `<h3>✦ エリート</h3><table>
+      <tr><td>遭遇 / 撃破</td><td>${eEnc} / ${eKill}</td></tr>
+      ${eLoot > 0 ? `<tr><td>戦利品取得</td><td>${eLoot} 回</td></tr>` : ""}
+    </table>`;
+  }
+
   // 記憶の商人 購入品（購入0なら全体非表示）
   let mmBlock = "";
   const mmps = runStats.memoryMerchantPurchases || [];
@@ -3618,6 +3941,8 @@ function buildEndCard(kind, reason) {
     </table>
     ${adventureBlock}
     ${miniBlock}
+    ${memoryBlock}
+    ${eliteBlock}
     ${growthBlock}
     ${skillsBlock}
     ${blessingBlock}
@@ -3744,6 +4069,10 @@ function initDebugBar() {
     <button id="dbg-forge" class="dbg-warn">⇒次階で鍛冶屋</button>
     <button id="dbg-bless" class="dbg-warn">⇒次階で祝福3択</button>
     <button id="dbg-mile"  class="dbg-warn">⇒次階で深層節目</button>
+    <button id="dbg-elite" class="dbg-warn">⇒次戦闘をエリート化</button>
+    <button id="dbg-mem-add">記憶効果を1つ付与</button>
+    <button id="dbg-mem-clr">記憶効果クリア</button>
+    <button id="dbg-loot"  class="dbg-warn">エリート戦利品3択</button>
     <button id="dbg-status">ステータス出力</button>
   `;
   document.body.appendChild(bar);
@@ -3798,6 +4127,31 @@ function initDebugBar() {
     window.__debugQueueEvent = "milestone";
     dlog("次イベントを深層節目に置換予約");
   };
+  // plus6
+  document.getElementById("dbg-elite").onclick = () => {
+    window.__debugForceElite = true;
+    dlog("次の通常戦闘をエリートにする予約");
+  };
+  document.getElementById("dbg-mem-add").onclick = () => {
+    if (!player) { dlog("プレイ中ではない"); return; }
+    if (!canAddMemory()) { dlog(`記憶効果上限到達 (${(player.memoryEffects||[]).length}/${memoryLimit()})`); return; }
+    const owned = player.memoryEffects || [];
+    const candidates = MEMORY_EFFECTS.filter(e => owned.indexOf(e.id) < 0);
+    if (candidates.length === 0) { dlog("候補がない"); return; }
+    const def = candidates[Math.floor(Math.random() * candidates.length)];
+    addMemoryEffect(def.id, "debug");
+    renderStatus();
+  };
+  document.getElementById("dbg-mem-clr").onclick = () => {
+    if (!player) return;
+    player.memoryEffects = [];
+    renderStatus();
+    dlog("記憶効果をクリア");
+  };
+  document.getElementById("dbg-loot").onclick = () => {
+    window.__debugQueueEvent = "loot";
+    dlog("次イベントをエリート戦利品3択に置換予約");
+  };
   document.getElementById("dbg-status").onclick = () => {
     if (!player) { dlog("プレイ中ではない"); return; }
     const dump = {
@@ -3810,9 +4164,12 @@ function initDebugBar() {
       blessings: runStats ? (runStats.blessingChoices || []).length : 0,
       mini: (runStats && runStats.miniGoal) ? `${runStats.miniGoal.text} ${miniGoalProgress()}/${runStats.miniGoal.target}` : "なし",
     };
+    dump.memories = (player.memoryEffects || []).map(id => (memoryDef(id) ? memoryDef(id).name : id)).join(",") || "なし";
+    dump.elite = runStats ? `遭遇${runStats.eliteEncounters||0} 撃破${runStats.eliteKills||0} 戦利品${runStats.eliteLootCount||0}` : "—";
     console.log("[debug status]", dump);
     dlog(`mode=${dump.mode} F${dump.floor} HP${dump.hp} G${dump.gold} 攻防${dump.atk}/${dump.def}`);
     dlog(`武=${dump.weapon} 防=${dump.armor} 撃破${dump.kills} 深層B${dump.depthBoss} 祝福${dump.blessings}`);
+    dlog(`記憶=${dump.memories} エリート=${dump.elite}`);
     dlog(`目標=${dump.mini}`);
   };
   document.getElementById("dbg-toggle").onclick = () => bar.classList.toggle("collapsed");
@@ -3845,6 +4202,28 @@ async function gameLoop() {
               () => offerMinorDepthBlessing("記憶の分岐路"),
             ];
             await fns[Math.floor(Math.random() * fns.length)]();
+          } else if (ev === "loot") {
+            // ガードを無視してエリート戦利品3択を強制呼出（plus6 デバッグ）
+            const pool = buildEliteLootPool({ elite: "depth" });
+            const opts = [];
+            while (opts.length < 3 && pool.length > 0) {
+              const i = Math.floor(Math.random() * pool.length);
+              opts.push(pool.splice(i, 1)[0]);
+            }
+            if (opts.length > 0) {
+              tellEvent("✦ [debug] エリート戦利品", "デバッグ呼出。1つ選べ。", "shop");
+              const idx = await ask(opts.map(o => ({ label: o.label })));
+              const chosen = opts[idx];
+              const result = chosen.apply();
+              if (runStats) {
+                runStats.eliteLootChoices = runStats.eliteLootChoices || [];
+                runStats.eliteLootChoices.push({ id: chosen.id, label: chosen.label, floor: player.floor });
+                runStats.eliteLootCount = (runStats.eliteLootCount || 0) + 1;
+                if (chosen.isMemory) runStats.eliteLootMemoryCount = (runStats.eliteLootMemoryCount || 0) + 1;
+              }
+              if (result) tell(result, "gold");
+              renderStatus();
+            }
           }
         } catch (de) { console.warn("[debug event failed]", de); }
       } else {
