@@ -430,6 +430,37 @@ const UPGRADES = [
   { id: "amulet",  name: "旅の護符", maxLv: 1, costs: [10],      desc: "1冒険1回、致命傷をHP1で耐える" },
 ];
 
+// === 記憶の商人 ===
+// 武器・防具・消耗品・特殊枠の候補プール。weight は抽選確率の重み。
+// allowRare(竜殺しの槍/聖なる鎧) は 初回クリア後 or 挑戦難易度のみ低確率で混入。
+// allowSage(賢者の石) は 初回クリア後のみ低確率で混入。
+const MM_WEAPONS = [
+  { slot: "weapon", item: "鉄の剣",     cost: 2, weight: 5 },
+  { slot: "weapon", item: "鋼の剣",     cost: 4, weight: 3 },
+  { slot: "weapon", item: "炎の剣",     cost: 6, weight: 2 },
+];
+const MM_WEAPONS_RARE = [{ slot: "weapon", item: "竜殺しの槍", cost: 10, weight: 0.3 }];
+const MM_ARMORS = [
+  { slot: "armor", item: "鎖帷子",     cost: 2, weight: 5 },
+  { slot: "armor", item: "鋼の鎧",     cost: 4, weight: 3 },
+];
+const MM_ARMORS_RARE = [{ slot: "armor", item: "聖なる鎧", cost: 10, weight: 0.3 }];
+const MM_CONSUMABLES = [
+  { slot: "consumable", item: "ポーション",     qty: 2, cost: 1, weight: 5 },
+  { slot: "consumable", item: "ハイポーション", qty: 1, cost: 2, weight: 4 },
+  { slot: "consumable", item: "毒消し草",       qty: 2, cost: 1, weight: 3 },
+  { slot: "consumable", item: "煙玉",           qty: 2, cost: 2, weight: 3 },
+  { slot: "consumable", item: "魔法の巻物",     qty: 2, cost: 2, weight: 3 },
+  { slot: "consumable", item: "力の薬",         qty: 1, cost: 2, weight: 3 },
+  { slot: "consumable", item: "鉄壁の薬",       qty: 1, cost: 2, weight: 3 },
+];
+const MM_SPECIALS = [
+  { slot: "special", item: "エリクサー",       cost: 6, weight: 2 },
+  { slot: "special", item: "幸運の小袋",       cost: 3, weight: 4, desc: "冒険開始時にランダム消耗品×2を得る" },
+  { slot: "special", item: "商人の紹介状",     cost: 3, weight: 4, desc: "次に出会う通常商人の初購入だけ10%引き" },
+];
+const MM_SPECIALS_SAGE = [{ slot: "special", item: "賢者の石", cost: 8, weight: 0.5 }];
+
 // === クラス成長選択 ===
 // Lv3/5/7/10で発動。idはplayer.classUpgradesのキーとして使う。
 const GROWTH_TRIGGER_LEVELS = [3, 5, 7, 10];
@@ -613,6 +644,7 @@ function recordRunResult(kind, score, reason) {
     classEventSuccess: runStats ? (runStats.classEventSuccess || {warrior:0,rogue:0,mage:0}) : {warrior:0,rogue:0,mage:0},
     growthSummary: (player.classUpgrades && Object.keys(player.classUpgrades).length > 0)
       ? Object.entries(player.classUpgrades).map(([k,v]) => `${k} Lv${v}`).join(" / ") : "",
+    memoryMerchantPurchases: runStats ? (runStats.memoryMerchantPurchases || []) : [],
     hasUpgrades,
     weapon: player.weapon, armor: player.armor,
     date: Date.now(),
@@ -673,15 +705,29 @@ const DEFAULT_META = {
   shards: 0,
   totalShards: 0,
   upgrades: { potion: 0, vitality: 0, purse: 0, amulet: 0 },
+  memoryMerchant: {
+    currentStock: [],     // 一時の在庫
+    rerolled: false,      // 1冒険1回までのリロール使用フラグ
+    purchasedCount: 0,    // 0..2
+    purchasedGear: false, // 武器・防具を1つ買ったか
+    purchasedItems: [],   // 再ロード時に再適用するための購入履歴
+  },
 };
 function loadMeta() {
   const m = loadJSON(META_KEY, null);
   const def = JSON.parse(JSON.stringify(DEFAULT_META));
   if (!m || typeof m !== "object") return def;
+  const mm = (m.memoryMerchant && typeof m.memoryMerchant === "object") ? m.memoryMerchant : {};
   return {
     ...def,
     ...m,
     upgrades: { ...def.upgrades, ...(m.upgrades || {}) },
+    memoryMerchant: {
+      ...def.memoryMerchant,
+      ...mm,
+      currentStock:   Array.isArray(mm.currentStock)   ? mm.currentStock   : [],
+      purchasedItems: Array.isArray(mm.purchasedItems) ? mm.purchasedItems : [],
+    },
   };
 }
 function saveMeta(m) { saveJSON(META_KEY, m); }
@@ -703,6 +749,18 @@ function wipeAllStorage() {
 function wipeSaveOnly() {
   removeKey(SAVE_KEY);
 }
+// 記憶の商人の一時状態だけリセット（出発時 / クリア時 / 死亡時）
+function wipeMemoryMerchant() {
+  const m = loadMeta();
+  m.memoryMerchant = {
+    currentStock: [],
+    rerolled: false,
+    purchasedCount: 0,
+    purchasedGear: false,
+    purchasedItems: [],
+  };
+  saveMeta(m);
+}
 
 // ---- ランタイム統計 ----
 let runStats = null;
@@ -719,6 +777,9 @@ function newRunStats() {
     shardMarks: {},        // {5:true,10:true,15:true} 一度きり付与の管理
     amuletAvailable: false,// 旅の護符をこの冒険でまだ使えるか
     classEventPity: 0,     // クラス専用イベント未発生階の連続数（5で次階発生率UP）
+    // 記憶の商人 関連（1冒険分のみ）
+    memoryMerchantPurchases: [], // [{item, qty, cost}]
+    merchantIntroAvailable: false, // 商人の紹介状: 次の通常商人で初購入10%引き
     // クラス別追加トラッカ
     pendingGrowth: [],                // 未消化のクラス成長選択 [3,5,...]
     classGrowthChoices: [],           // [{level, id}] 終了画面表示用
@@ -755,6 +816,8 @@ function normalizeRunStats(rs) {
   if (typeof out.fleeSuccessCount!== "number") out.fleeSuccessCount = 0;
   if (typeof out.scrollUseCount  !== "number") out.scrollUseCount  = 0;
   if (typeof out.classEventPity  !== "number") out.classEventPity  = 0;
+  if (!Array.isArray(out.memoryMerchantPurchases)) out.memoryMerchantPurchases = [];
+  if (typeof out.merchantIntroAvailable !== "boolean") out.merchantIntroAvailable = false;
   return out;
 }
 // player に classUpgrades を補完
@@ -954,8 +1017,13 @@ const ROGUE_BUY_RATE  = 0.9;   // 仕入れ -10%
 const ROGUE_SELL_RATE = 1.1;   // 売値 +10%
 function buyPrice(item) {
   const base = ITEMS[item].price;
-  if (player && player.cls === "盗賊") return Math.max(1, Math.floor(base * ROGUE_BUY_RATE));
-  return base;
+  let mult = 1.0;
+  if (player && player.cls === "盗賊") mult *= ROGUE_BUY_RATE;
+  // 商人の紹介状：通常商人で初購入だけ10%引き
+  if (runStats && runStats.merchantIntroAvailable) mult *= 0.9;
+  // 紹介状＋盗賊で重なっても最低70%まで
+  if (mult < 0.70) mult = 0.70;
+  return Math.max(1, Math.floor(base * mult));
 }
 function sellPrice(item) {
   const base = Math.floor(ITEMS[item].price / 2);
@@ -1566,6 +1634,11 @@ async function eventMerchant() {
     player.inventory.push(item);
     stock.splice(idx, 1);
     tell(`${item} を ${price}G で購入した。`, "gold");
+    // 商人の紹介状は初購入で消費
+    if (runStats.merchantIntroAvailable) {
+      runStats.merchantIntroAvailable = false;
+      tell("(紹介状の効果はここまでだ。)", "dim");
+    }
     renderStatus();
     saveGame();
     if (stock.length === 0) { tell("「これで打ち止めだ。気をつけてな。」"); return; }
@@ -1791,6 +1864,160 @@ async function processGrowthQueue() {
   while (runStats.pendingGrowth.length > 0 && player.hp > 0) {
     const lvl = runStats.pendingGrowth.shift();
     await offerGrowthChoice(lvl);
+  }
+}
+
+// ====================================================================
+// 記憶の商人
+// ====================================================================
+function generateMemoryMerchantStock() {
+  const records = loadRecords();
+  const hasCleared = (records.clears || 0) > 0;
+  const isChallenge = player && player.difficulty === "challenge";
+  const allowRare = hasCleared || isChallenge;
+  const allowSage = hasCleared;
+  const pickWeighted = (pool) => {
+    if (pool.length === 0) return null;
+    return weightedChoice(pool.map(p => [p, p.weight]));
+  };
+  const weapons = MM_WEAPONS.concat(allowRare ? MM_WEAPONS_RARE : []);
+  const armors  = MM_ARMORS.concat(allowRare ? MM_ARMORS_RARE : []);
+  const specials = MM_SPECIALS.concat(allowSage ? MM_SPECIALS_SAGE : []);
+  const cons = MM_CONSUMABLES;
+
+  const stock = [];
+  stock.push(pickWeighted(weapons));
+  stock.push(pickWeighted(armors));
+  // 消耗品2枠（重複は許容するが、なるべく異なるものを優先）
+  const c1 = pickWeighted(cons);
+  let c2 = pickWeighted(cons);
+  for (let tries = 0; tries < 4 && c2.item === c1.item; tries++) c2 = pickWeighted(cons);
+  stock.push(c1);
+  stock.push(c2);
+  stock.push(pickWeighted(specials));
+  return stock.filter(Boolean);
+}
+
+// 購入アイテムをプレイヤーへ反映する。shards 減算はここでは行わない。
+function applyMemoryMerchantPurchase(it) {
+  const info = ITEMS[it.item];
+  if (info && info.category === "weapon") {
+    const curAtk = player.weapon ? (ITEMS[player.weapon].atk || 0) : -1;
+    if (info.atk > curAtk) {
+      const old = player.weapon;
+      player.weapon = it.item;
+      if (old) player.inventory.push(old);
+    } else {
+      player.inventory.push(it.item);
+    }
+  } else if (info && info.category === "armor") {
+    const curDef = player.armor ? (ITEMS[player.armor].defense || 0) : -1;
+    if (info.defense > curDef) {
+      const old = player.armor;
+      player.armor = it.item;
+      if (old) player.inventory.push(old);
+    } else {
+      player.inventory.push(it.item);
+    }
+  } else if (info && info.category === "consumable") {
+    const qty = it.qty || 1;
+    for (let i = 0; i < qty; i++) player.inventory.push(it.item);
+  } else if (it.item === "幸運の小袋") {
+    const lucky = ["ポーション", "毒消し草", "煙玉", "魔法の巻物", "力の薬", "鉄壁の薬"];
+    for (let i = 0; i < 2; i++) player.inventory.push(choice(lucky));
+  } else if (it.item === "商人の紹介状") {
+    runStats.merchantIntroAvailable = true;
+  }
+}
+
+async function showMemoryMerchant() {
+  const meta0 = loadMeta();
+  // shards も既購入もリロール痕跡もない＝初プレイユーザは静かにスキップ
+  if ((meta0.shards || 0) === 0
+      && meta0.memoryMerchant.currentStock.length === 0
+      && meta0.memoryMerchant.purchasedItems.length === 0
+      && !meta0.memoryMerchant.rerolled) {
+    return;
+  }
+
+  // 在庫初期化
+  let meta = loadMeta();
+  let mm = meta.memoryMerchant;
+  if (!Array.isArray(mm.currentStock) || mm.currentStock.length === 0) {
+    mm.currentStock = generateMemoryMerchantStock();
+    saveMeta(meta);
+  }
+  // リロード復元：既に購入済みなら player に再適用
+  if (Array.isArray(mm.purchasedItems) && mm.purchasedItems.length > 0) {
+    for (const p of mm.purchasedItems) {
+      applyMemoryMerchantPurchase(p);
+      runStats.memoryMerchantPurchases.push({ item: p.item, qty: p.qty || 1, cost: p.cost });
+    }
+    tell(`(前回ここで選んだ品を引き継いだ：${mm.purchasedItems.map(p => p.item).join(", ")})`, "dim");
+  }
+
+  tellEvent("📦 記憶の商人", "「次の冒険の支度はどうするね？ 記憶の欠片で売ってやるよ。」", "shop");
+
+  while (true) {
+    meta = loadMeta();
+    mm = meta.memoryMerchant;
+    tell(`💎 残: ${meta.shards}　購入: ${mm.purchasedCount}/2${mm.purchasedGear ? "（武具購入済）" : ""}`, "shop");
+
+    const opts = mm.currentStock.map((it) => {
+      const isGear = (it.slot === "weapon" || it.slot === "armor");
+      const reason = (meta.shards < it.cost) ? "（欠片不足）"
+                   : (mm.purchasedCount >= 2) ? "（購入上限）"
+                   : (isGear && mm.purchasedGear) ? "（武具購入済）"
+                   : "";
+      const dis = reason !== "";
+      const qtyTag = (it.qty && it.qty > 1) ? `×${it.qty}` : "";
+      const baseDesc = it.desc || (ITEMS[it.item] && ITEMS[it.item].desc) || "";
+      return {
+        label: `${it.item}${qtyTag}　${it.cost}欠片`,
+        desc: baseDesc + reason,
+        disabled: dis,
+      };
+    });
+    opts.push({
+      label: `🔄 リロール  1欠片`,
+      desc: mm.rerolled ? "（既に使用済み）" : (meta.shards < 1 ? "（欠片不足）" : "在庫を入れ替える（1冒険1回）"),
+      disabled: mm.rerolled || meta.shards < 1,
+    });
+    opts.push({ label: "🚶 買わずに出発", desc: "迷宮へ向かう" });
+
+    const idx = await ask(opts);
+
+    if (idx === opts.length - 1) {
+      // 出発：商人の状態をクリーンアップ
+      wipeMemoryMerchant();
+      tell("「達者でな」", "shop");
+      break;
+    } else if (idx === opts.length - 2) {
+      // リロール
+      meta.shards -= 1;
+      mm.currentStock = generateMemoryMerchantStock();
+      mm.rerolled = true;
+      saveMeta(meta);
+      tell("商品が入れ替わった。", "shop");
+      continue;
+    } else {
+      // 購入
+      const it = mm.currentStock[idx];
+      meta.shards -= it.cost;
+      mm.purchasedCount += 1;
+      if (it.slot === "weapon" || it.slot === "armor") mm.purchasedGear = true;
+      mm.purchasedItems = mm.purchasedItems || [];
+      mm.purchasedItems.push({ ...it });
+      mm.currentStock.splice(idx, 1);
+      saveMeta(meta);
+      applyMemoryMerchantPurchase(it);
+      runStats.memoryMerchantPurchases.push({ item: it.item, qty: it.qty || 1, cost: it.cost });
+      const qtyTag = (it.qty && it.qty > 1) ? `×${it.qty}` : "";
+      tell(`✦ ${it.item}${qtyTag} を ${it.cost}欠片で購入した。`, "gold");
+      if (mm.purchasedCount >= 2) {
+        tell("「これで2品。あとは生きて戻ってくることだ」", "shop");
+      }
+    }
   }
 }
 
@@ -2060,6 +2287,10 @@ async function startNewGame() {
   clearNarrative();
   tellEvent("冒険の始まり", `${name}（${cls}）は ${DIFFICULTIES[difficulty].label} の迷宮へ向かった。`);
   if (upMsgs.length) tell("✦ 記憶の強化が発動: " + upMsgs.join(" / "), "shop");
+
+  // 記憶の商人（欠片で開始準備を整える機会）
+  await showMemoryMerchant();
+
   await pause("迷宮に入る");
   return true;
 }
@@ -2306,6 +2537,18 @@ function buildEndCard(kind, reason) {
     ? `<div class="badge-list" style="margin-top:8px;"><span class="badge" style="font-size:13px;">称号: ${escapeHtml(title)}</span></div>`
     : "";
 
+  // 記憶の商人 購入品
+  let mmBlock = "";
+  const mmps = runStats.memoryMerchantPurchases || [];
+  if (mmps.length > 0) {
+    const totalCost = mmps.reduce((s, p) => s + (p.cost || 0), 0);
+    const lines = mmps.map(p => {
+      const qtyTag = (p.qty && p.qty > 1) ? `×${p.qty}` : "";
+      return `<tr><td>${escapeHtml(p.item)}${qtyTag}</td><td>${p.cost}欠片</td></tr>`;
+    }).join("");
+    mmBlock = `<h3>📦 記憶の商人</h3><table>${lines}<tr><td>合計</td><td>${totalCost}欠片</td></tr></table>`;
+  }
+
   // 難易度・強化フラグ
   const dCfg = diffCfg();
   const dLabel = dCfg.label;
@@ -2342,6 +2585,7 @@ function buildEndCard(kind, reason) {
     ${growthBlock}
     ${skillsBlock}
     ${classEventBlock}
+    ${mmBlock}
     ${titleBlock}
     ${shardBlock}
     ${badges}
@@ -2384,6 +2628,8 @@ async function ending() {
   const reason = `魔王ザロスを討伐し、迷宮の闇を払った。`;
   recordRunResult("win", computeScore("win"), reason);
   clearSave();
+  // 開始時商人の状態を念のためクリア（出発時にもクリア済だが二重で安全）
+  wipeMemoryMerchant();
 
   $status.style.display = "none";
   clearNarrative(); clearActions();
@@ -2410,6 +2656,7 @@ async function gameOver() {
     : `力尽きた。`;
   recordRunResult("loss", computeScore("loss"), reason);
   clearSave();
+  wipeMemoryMerchant();
 
   clearNarrative(); clearActions();
   tellRaw(buildEndCard("loss", reason));
