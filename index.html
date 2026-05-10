@@ -246,6 +246,49 @@ input.text-input:focus { border-color: var(--accent); }
 }
 .title-sub { color: var(--dim); font-size: 13px; }
 .version-tag { color: var(--dim); font-size: 11px; margin-top: 4px; opacity: 0.8; }
+/* === 開発確認用デバッグバー（?debug=1 のときだけ表示） === */
+#debug-bar {
+  position: fixed;
+  bottom: env(safe-area-inset-bottom, 6px);
+  right: 6px;
+  z-index: 9999;
+  display: none;
+  flex-direction: column;
+  gap: 3px;
+  background: rgba(20, 8, 0, 0.92);
+  color: #ffd45e;
+  border: 1px solid #ffd45e;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 11px;
+  max-width: 220px;
+  max-height: 70vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+#debug-bar.visible { display: flex; }
+#debug-bar.collapsed > *:not(h4):not(.dbg-toggle) { display: none; }
+#debug-bar h4 {
+  margin: 0;
+  font-size: 11px;
+  color: #ffd45e;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+#debug-bar .dbg-row { display: flex; flex-wrap: wrap; gap: 3px; }
+#debug-bar button {
+  font-size: 11px;
+  padding: 3px 6px;
+  min-height: 26px;
+  background: #2a1a05;
+  color: #ffd45e;
+  border: 1px solid #6a4a10;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+}
+#debug-bar button:active { background: #3a2a10; }
+#debug-bar button.dbg-warn { color: #ff8a8a; border-color: #884; }
 
 /* === 終了画面・記録カード === */
 .endcard {
@@ -394,7 +437,13 @@ input.text-input:focus { border-color: var(--accent); }
 // ====================================================================
 const FINAL_FLOOR = 20;
 const BOSS_FLOORS = new Set([5, 10, 15, 20]);
-const APP_VERSION = "v20260510-rogue-plus";
+const APP_VERSION = "v20260510-rogue-plus2";
+// 開発確認用：URLに ?debug=1 が付いているときだけ有効化する。
+// 通常プレイでは false 固定で、UIも出ない。
+const DEBUG_MODE = (() => {
+  try { return new URLSearchParams(location.search).get("debug") === "1"; }
+  catch { return false; }
+})();
 
 const FORGE_COSTS = [0, 60, 100, 160, 240, 340];
 const STORY_FORGE_LIMIT = 3;
@@ -2940,6 +2989,10 @@ async function startNewGame(mode = "story") {
   player.mode = mode;
   if (mode === "endless") player.floor = 21;
   runStats = newRunStats(mode);
+  if (mode === "endless") {
+    // 深層は21Fから始まるので、5/10/15F到達ボーナスは既達扱い（不正な+6欠片防止）
+    runStats.shardMarks = { 5: true, 10: true, 15: true };
+  }
   assignMiniGoal();
   // 強化適用
   applyUpgrades(player);
@@ -3516,6 +3569,113 @@ async function gameOver() {
 // ====================================================================
 // メインループ
 // ====================================================================
+// ====================================================================
+// 開発確認用デバッグバー（?debug=1 のときだけ生成）
+// 通常プレイには一切表示・影響しない。
+// ====================================================================
+function initDebugBar() {
+  if (!DEBUG_MODE) return;
+  const bar = document.createElement("div");
+  bar.id = "debug-bar";
+  bar.className = "visible";
+  bar.innerHTML = `
+    <h4>🛠 開発確認用 (?debug=1)</h4>
+    <button class="dbg-toggle" id="dbg-toggle">折りたたみ</button>
+    <div class="dbg-row" id="dbg-floors">
+      <span>floor →</span>
+      <button data-floor="5">5</button>
+      <button data-floor="10">10</button>
+      <button data-floor="15">15</button>
+      <button data-floor="20">20</button>
+      <button data-floor="21">21</button>
+      <button data-floor="25">25</button>
+      <button data-floor="30">30</button>
+    </div>
+    <button id="dbg-gold">+100G</button>
+    <button id="dbg-hp">Full HP</button>
+    <div class="dbg-row">
+      <button id="dbg-pot">+ポーション</button>
+      <button id="dbg-smk">+煙玉</button>
+      <button id="dbg-scr">+巻物</button>
+    </div>
+    <button id="dbg-forge" class="dbg-warn">⇒次階で鍛冶屋</button>
+    <button id="dbg-bless" class="dbg-warn">⇒次階で祝福3択</button>
+    <button id="dbg-mile"  class="dbg-warn">⇒次階で深層節目</button>
+    <button id="dbg-status">ステータス出力</button>
+  `;
+  document.body.appendChild(bar);
+  const dlog = (msg) => tell(`[debug] ${msg}`, "shop");
+  bar.querySelectorAll("[data-floor]").forEach(b => {
+    b.onclick = () => {
+      if (!player) { dlog("プレイ中ではない"); return; }
+      player.floor = +b.dataset.floor;
+      renderStatus();
+      dlog(`floor=${player.floor} に変更（次階移行から反映）`);
+    };
+  });
+  document.getElementById("dbg-gold").onclick = () => {
+    if (!player) return;
+    player.gold += 100;
+    renderStatus();
+    dlog("+100G");
+  };
+  document.getElementById("dbg-hp").onclick = () => {
+    if (!player) return;
+    player.hp = player.max_hp;
+    renderStatus();
+    dlog("Full HP");
+  };
+  document.getElementById("dbg-pot").onclick = () => {
+    if (!player) return;
+    player.inventory.push("ポーション");
+    renderStatus();
+    dlog("+ポーション");
+  };
+  document.getElementById("dbg-smk").onclick = () => {
+    if (!player) return;
+    player.inventory.push("煙玉");
+    renderStatus();
+    dlog("+煙玉");
+  };
+  document.getElementById("dbg-scr").onclick = () => {
+    if (!player) return;
+    player.inventory.push("魔法の巻物");
+    renderStatus();
+    dlog("+魔法の巻物");
+  };
+  document.getElementById("dbg-forge").onclick = () => {
+    window.__debugQueueEvent = "forge";
+    dlog("次イベントを鍛冶屋に置換予約");
+  };
+  document.getElementById("dbg-bless").onclick = () => {
+    window.__debugQueueEvent = "blessing";
+    dlog("次イベントを祝福3択に置換予約");
+  };
+  document.getElementById("dbg-mile").onclick = () => {
+    window.__debugQueueEvent = "milestone";
+    dlog("次イベントを深層節目に置換予約");
+  };
+  document.getElementById("dbg-status").onclick = () => {
+    if (!player) { dlog("プレイ中ではない"); return; }
+    const dump = {
+      mode: player.mode, floor: player.floor,
+      hp: `${player.hp}/${player.max_hp}`,
+      gold: player.gold, atk: pAtk(player), def: pDef(player),
+      weapon: equipLabel("weapon"), armor: equipLabel("armor"),
+      kills: runStats ? runStats.kills : 0,
+      depthBoss: runStats ? runStats.depthBossKills : 0,
+      blessings: runStats ? (runStats.blessingChoices || []).length : 0,
+      mini: (runStats && runStats.miniGoal) ? `${runStats.miniGoal.text} ${miniGoalProgress()}/${runStats.miniGoal.target}` : "なし",
+    };
+    console.log("[debug status]", dump);
+    dlog(`mode=${dump.mode} F${dump.floor} HP${dump.hp} G${dump.gold} 攻防${dump.atk}/${dump.def}`);
+    dlog(`武=${dump.weapon} 防=${dump.armor} 撃破${dump.kills} 深層B${dump.depthBoss} 祝福${dump.blessings}`);
+    dlog(`目標=${dump.mini}`);
+  };
+  document.getElementById("dbg-toggle").onclick = () => bar.classList.toggle("collapsed");
+}
+initDebugBar();
+
 async function gameLoop() {
   try {
     await titleScreen();
@@ -3524,6 +3684,27 @@ async function gameLoop() {
       checkFloorAchievements();
       renderStatus();
 
+      // ?debug=1 でキュー予約されたイベントは、通常イベントの代わりに1回だけ実行する
+      // （ボス階の場合もここで上書きする＝ボス確認も flexible に）
+      if (DEBUG_MODE && window.__debugQueueEvent) {
+        const ev = window.__debugQueueEvent;
+        window.__debugQueueEvent = null;
+        try {
+          if (ev === "forge") {
+            await eventForge();
+          } else if (ev === "blessing") {
+            await offerBlessingChoice("debug");
+          } else if (ev === "milestone") {
+            // eventDepthMilestone のガードを避けて中身を直接呼ぶ
+            const fns = [
+              eventDepthCampfire,
+              () => eventForge(0.8, "忘れられた鍛冶場"),
+              () => offerMinorDepthBlessing("記憶の分岐路"),
+            ];
+            await fns[Math.floor(Math.random() * fns.length)]();
+          }
+        } catch (de) { console.warn("[debug event failed]", de); }
+      } else {
       // ボス階判定：本編は BOSS_FLOORS、深層は floor>20 かつ 5の倍数
       const bossFloor = isEndlessMode()
         ? isEndlessBossFloor(player.floor)
@@ -3542,6 +3723,7 @@ async function gameLoop() {
           await pickEvent()();
           if (classFn) runStats.classEventPity = pity + 1;
         }
+      }
       }
       // イベント解決直後セーブ：HP/所持金/アイテム/EXP/装備の最新を反映
       if (player.hp > 0) saveGame();
