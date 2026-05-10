@@ -718,6 +718,7 @@ function newRunStats() {
     shardLog: [],          // [{reason, amount}]
     shardMarks: {},        // {5:true,10:true,15:true} 一度きり付与の管理
     amuletAvailable: false,// 旅の護符をこの冒険でまだ使えるか
+    classEventPity: 0,     // クラス専用イベント未発生階の連続数（5で次階発生率UP）
     // クラス別追加トラッカ
     pendingGrowth: [],                // 未消化のクラス成長選択 [3,5,...]
     classGrowthChoices: [],           // [{level, id}] 終了画面表示用
@@ -753,6 +754,7 @@ function normalizeRunStats(rs) {
   if (typeof out.defendingTimes  !== "number") out.defendingTimes  = 0;
   if (typeof out.fleeSuccessCount!== "number") out.fleeSuccessCount = 0;
   if (typeof out.scrollUseCount  !== "number") out.scrollUseCount  = 0;
+  if (typeof out.classEventPity  !== "number") out.classEventPity  = 0;
   return out;
 }
 // player に classUpgrades を補完
@@ -1279,7 +1281,10 @@ async function combat(m, canFlee = true) {
       // 盗賊+革の鎧：+5%
       const armorBonus = (isRogue && player.armor === "革の鎧") ? 0.05 : 0;
       const ashiSabaki = isRogue ? Math.min(0.40, 0.10 * growthLv("足さばき")) : 0;
-      const chance = 0.4 + player.level * 0.03 + (isRogue ? 0.20 : 0) + armorBonus + ashiSabaki;
+      const raw = 0.4 + player.level * 0.03 + (isRogue ? 0.20 : 0) + armorBonus + ashiSabaki;
+      // 難易度別の逃走率上限：物語95% / 標準90% / 挑戦85%
+      const cap = ({ story: 0.95, normal: 0.90, challenge: 0.85 })[currentDifficulty()];
+      const chance = Math.min(cap, raw);
       if (Math.random() < chance) {
         if (isRogue) tell("盗賊の脚で素早く距離を取った。", "shop");
         if (armorBonus > 0) { runStats.equipmentSynergyTriggers += 1; tell("革の鎧が音を抑え、滑るように離脱した。", "shop"); }
@@ -1310,6 +1315,8 @@ async function combat(m, canFlee = true) {
             runStats.equipmentSynergyTriggers += 1;
           }
         }
+        // ボス戦は最低2ダメ保証（防御無双による作業化防止）
+        if (BOSS_FLOORS.has(player.floor)) edmg = Math.max(2, edmg);
       }
       // 戦士+聖なる鎧：ボス戦の初撃 -5
       if (player.cls === "戦士" && player.armor === "聖なる鎧"
@@ -1513,13 +1520,15 @@ async function eventMerchant() {
   let pool = ["ポーション", "ハイポーション", "毒消し草", "力の薬", "煙玉", "魔法の巻物", "鉄の剣", "鋼の剣", "革の鎧", "鎖帷子"];
   if (player.floor >= 8)  pool = pool.concat(["炎の剣", "鋼の鎧", "エリクサー"]);
   if (player.floor >= 14) pool = pool.concat(["竜殺しの槍", "聖なる鎧"]);
-  // 盗賊「目利き」: Lv毎に高品質アイテム枠を増やす
+  const stock = Array.from({ length: 5 }, () => choice(pool));
+  // 盗賊「目利き」: 5品中の指定数を高品質枠に置換（最大2枠まで）
+  // 偏りすぎ防止のため、プール拡張ではなく「枠の置換」方式に変更
   if (player.cls === "盗賊" && growthLv("目利き") > 0) {
     const goods = ["ハイポーション","エリクサー","魔法の巻物","鎖帷子"];
-    for (let i = 0; i < growthLv("目利き"); i++) pool = pool.concat(goods);
+    const replaces = Math.min(2, growthLv("目利き") >= 3 ? 2 : 1);
+    for (let i = 0; i < replaces; i++) stock[i] = choice(goods);
     tell("「目利きの客には、いい物を用意してある」", "shop");
   }
-  const stock = Array.from({ length: 5 }, () => choice(pool));
 
   while (true) {
     const opts = stock.map(it => {
@@ -1807,6 +1816,10 @@ function determineTitle() {
   }
   return "";
 }
+// 終了処理の前に runStats.title を確定する（recordRunResult より先に呼ぶ）
+function finalizeTitle() {
+  if (runStats) runStats.title = determineTitle();
+}
 
 // ====================================================================
 // クラス専用イベント
@@ -2072,6 +2085,8 @@ async function resumeGame() {
     if (f >= 5  && runStats.shardMarks[5]  === undefined) runStats.shardMarks[5]  = true;
     if (f >= 10 && runStats.shardMarks[10] === undefined) runStats.shardMarks[10] = true;
     if (f >= 15 && runStats.shardMarks[15] === undefined) runStats.shardMarks[15] = true;
+    // normalize後の補完済みデータを保存して、次回読込でも整合を保つ
+    saveGame();
     clearNarrative();
     const dl = DIFFICULTIES[player.difficulty].label;
     tellEvent("冒険の再開", `${player.name}（${player.cls}/${dl}）は B${player.floor}F で目を覚ました。`);
@@ -2094,24 +2109,31 @@ async function showRecords() {
   const meta = loadMeta();
   let html = `<div class="endcard">
     <h2>📜 冒険記録</h2>
+
+    <h3>📊 基本記録</h3>
     <table>
       <tr><td>最高到達階</td><td>${r.highestFloor}F</td></tr>
       <tr><td>最高スコア</td><td>${r.highestScore}</td></tr>
-      <tr><td>クリア回数</td><td>${r.clears}</td></tr>
-      <tr><td>死亡回数</td><td>${r.deaths}</td></tr>
-      <tr><td>戦士 最高 / クリア</td><td>${r.classBest["戦士"]}F / ${r.classClears["戦士"]}回</td></tr>
-      <tr><td>盗賊 最高 / クリア</td><td>${r.classBest["盗賊"]}F / ${r.classClears["盗賊"]}回</td></tr>
-      <tr><td>魔導士 最高 / クリア</td><td>${r.classBest["魔導士"]}F / ${r.classClears["魔導士"]}回</td></tr>
+      <tr><td>クリア / 死亡</td><td>${r.clears}回 / ${r.deaths}回</td></tr>
     </table>
-    <h3>難易度別</h3>
+
+    <h3>⚔ クラス記録</h3>
     <table>
-      <tr><td>物語 最高 / クリア</td><td>${r.byDiff.story.highestFloor}F / ${r.byDiff.story.clears}回</td></tr>
-      <tr><td>標準 最高 / クリア</td><td>${r.byDiff.normal.highestFloor}F / ${r.byDiff.normal.clears}回</td></tr>
-      <tr><td>挑戦 最高 / クリア</td><td>${r.byDiff.challenge.highestFloor}F / ${r.byDiff.challenge.clears}回</td></tr>
+      <tr><td>戦士</td><td>最高 ${r.classBest["戦士"]}F / クリア ${r.classClears["戦士"]}回</td></tr>
+      <tr><td>盗賊</td><td>最高 ${r.classBest["盗賊"]}F / クリア ${r.classClears["盗賊"]}回</td></tr>
+      <tr><td>魔導士</td><td>最高 ${r.classBest["魔導士"]}F / クリア ${r.classClears["魔導士"]}回</td></tr>
     </table>
-    <h3>💎 記憶の欠片</h3>
+
+    <h3>🎯 難易度別</h3>
     <table>
-      <tr><td>所持</td><td>${meta.shards}</td></tr>
+      <tr><td>物語</td><td>最高 ${r.byDiff.story.highestFloor}F / クリア ${r.byDiff.story.clears}回</td></tr>
+      <tr><td>標準</td><td>最高 ${r.byDiff.normal.highestFloor}F / クリア ${r.byDiff.normal.clears}回</td></tr>
+      <tr><td>挑戦</td><td>最高 ${r.byDiff.challenge.highestFloor}F / クリア ${r.byDiff.challenge.clears}回</td></tr>
+    </table>
+
+    <h3>💎 記憶の強化</h3>
+    <table>
+      <tr><td>所持欠片</td><td>${meta.shards}</td></tr>
       <tr><td>累計獲得</td><td>${meta.totalShards}</td></tr>
     </table>`;
   if (r.lastResult) {
@@ -2149,7 +2171,12 @@ async function showRecords() {
       <td>${escapeHtml(def.desc)}</td>
     </tr>`;
   }
-  html += `</table></div>`;
+  html += `</table>
+    <h3>🛠 データ管理</h3>
+    <p style="margin:6px 0; font-size:11px; color:var(--dim);">
+      セーブの削除・全記録の削除はタイトル画面の「記録を消す」から行えます。
+    </p>
+  </div>`;
 
   clearNarrative();
   tellRaw(html);
@@ -2352,6 +2379,8 @@ async function ending() {
   addShardsToRun("クリア達成", 5);
   // 累計欠片をメタへ確定反映
   addShards(runStats.earnedShards || 0);
+  // 称号を確定して lastResult に保存できるようにする
+  finalizeTitle();
   const reason = `魔王ザロスを討伐し、迷宮の闇を払った。`;
   recordRunResult("win", computeScore("win"), reason);
   clearSave();
@@ -2375,6 +2404,7 @@ async function ending() {
 async function gameOver() {
   // 死亡時：これまで稼いだ欠片を確定でメタへ反映（クリアボーナスは無し）
   addShards(runStats ? (runStats.earnedShards || 0) : 0);
+  finalizeTitle();
   const reason = runStats && runStats.lastDamageSource
     ? `${runStats.lastDamageSource} に倒された。`
     : `力尽きた。`;
@@ -2408,12 +2438,16 @@ async function gameLoop() {
       if (BOSS_FLOORS.has(player.floor)) {
         await eventBoss();
       } else {
-        // 7%でクラス専用イベント、それ以外は通常イベント
+        // クラス専用イベント抽選：基礎7%、5階連続未発生で次階は25%（天井方式）
         const classFn = CLASS_EVENT_MAP[player.cls];
-        if (classFn && Math.random() < 0.07) {
+        const pity    = (runStats.classEventPity || 0);
+        const rate    = (pity >= 5) ? 0.25 : 0.07;
+        if (classFn && Math.random() < rate) {
           await classFn();
+          runStats.classEventPity = 0;
         } else {
           await pickEvent()();
+          if (classFn) runStats.classEventPity = pity + 1;
         }
       }
       // イベント解決直後セーブ：HP/所持金/アイテム/EXP/装備の最新を反映
