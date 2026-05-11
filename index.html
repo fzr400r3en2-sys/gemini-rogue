@@ -482,7 +482,7 @@ input.text-input:focus { border-color: var(--accent); }
 // ====================================================================
 const FINAL_FLOOR = 20;
 const BOSS_FLOORS = new Set([5, 10, 15, 20]);
-const APP_VERSION = "v20260510-rogue-plus7";
+const APP_VERSION = "v20260510-rogue-plus8";
 // 開発確認用：URLに ?debug=1 が付いているときだけ有効化する。
 // 通常プレイでは false 固定で、UIも出ない。
 const DEBUG_MODE = (() => {
@@ -1258,12 +1258,38 @@ function depthBossKeyFor(floor) {
   const i = Math.floor((floor - 25) / 5) % DEPTH_BOSS_ROTATION.length;
   return DEPTH_BOSS_ROTATION[(i + DEPTH_BOSS_ROTATION.length) % DEPTH_BOSS_ROTATION.length];
 }
+// plus8: 深層スケーリングを3段階に分割
+// 21〜30F: 入門区間（緩い）  31〜40F: ビルド完成区間（中） 41F以降: 本格深層
+// 連続性を保ちつつ40Fを「壁だが越えられる節目」にする。
+// 累積HP倍率: f30=1.45 / f40=2.00 / f50=2.60（旧: f30=1.60 / f40=2.20 / f50=2.80）
+// 累積ATK倍率: f30=1.32 / f40=1.70 / f50=2.15（旧: f30=1.40 / f40=1.80 / f50=2.20）
+function depthScaleMultipliers(floor) {
+  if (floor <= 20) return { hp: 1, atk: 1 };
+  if (floor <= 30) {
+    return {
+      hp:  1.00 + (floor - 20) * 0.045,
+      atk: 1.00 + (floor - 20) * 0.032,
+    };
+  }
+  if (floor <= 40) {
+    return {
+      hp:  1.45 + (floor - 30) * 0.055,
+      atk: 1.32 + (floor - 30) * 0.038,
+    };
+  }
+  return {
+    hp:  2.00 + (floor - 40) * 0.060,
+    atk: 1.70 + (floor - 40) * 0.045,
+  };
+}
 function scaleMonsterForDepth(m, floor, mode) {
   if (mode !== "endless" || floor <= 20) return m;
+  const mul = depthScaleMultipliers(floor);
   const depth = floor - 20;
-  m.hp  = Math.max(1, Math.floor(m.hp  * (1 + depth * 0.06)));
-  m.atk = Math.max(1, Math.floor(m.atk * (1 + depth * 0.04)));
+  m.hp  = Math.max(1, Math.floor(m.hp  * mul.hp));
+  m.atk = Math.max(1, Math.floor(m.atk * mul.atk));
   m.defense += Math.floor(floor / 10);
+  // 報酬は据え置き（線形）：プレイヤー側の成長余地を確保
   m.exp  = Math.max(1, Math.floor(m.exp  * (1 + depth * 0.05)));
   m.gold = Math.max(1, Math.floor(m.gold * (1 + depth * 0.05)));
   return m;
@@ -2679,12 +2705,31 @@ async function offerBlessingChoice(sourceLabel) {
   saveGame();
 }
 async function offerMinorDepthBlessing(sourceLabel) {
+  // plus8: プールに「最大HP+3」「鍛冶+1」を追加し、40F挑戦準備の候補を厚くする。
+  // 鍛冶+1は鍛冶上限に達していない時のみ候補入りする。
   const pool = [
     { id: "minor_heal", name: "灯火の記憶", desc: "HPを少し回復", apply: () => `HPが ${heal(player, Math.max(8, Math.floor(player.max_hp * 0.18)))} 回復した。` },
     { id: "minor_gold", name: "小銭の記憶", desc: "30Gを得る", apply: () => { addGold(player, 30); return "30Gを得た。"; } },
     { id: "minor_potion", name: "薬草の記憶", desc: "ポーション +1", apply: () => { player.inventory.push("ポーション"); return "ポーションを得た。"; } },
     { id: "minor_scroll", name: "紙片の記憶", desc: "巻物 +1", apply: () => { player.inventory.push("魔法の巻物"); return "魔法の巻物を得た。"; } },
+    { id: "minor_vitality", name: "石の記憶", desc: "最大HP +3", apply: () => {
+      player.max_hp += 3;
+      player.hp = Math.min(player.max_hp, player.hp + 3);
+      return "最大HPが3上昇した。";
+    } },
   ];
+  // 鍛冶上限が残っていれば候補に追加（武具どちらか強化）
+  if (canEnhance("weapon", 1, true) || canEnhance("armor", 1, true)) {
+    pool.push({ id: "minor_forge", name: "鎚の記憶", desc: "武器か防具を +1", apply: () => {
+      const slots = ["weapon", "armor"].filter(s => canEnhance(s, 1, true));
+      const slot = slots.length === 2
+        ? (getEnhance("weapon") <= getEnhance("armor") ? "weapon" : "armor")
+        : slots[0];
+      if (!slot) return "鍛える装備がなかった。";
+      enhanceEquipment(slot, { free: true, source: "milestone" });
+      return `${slot === "weapon" ? equipLabel("weapon") : equipLabel("armor")} が強化された。`;
+    } });
+  }
   const options = [];
   const work = [...pool];
   while (options.length < 3 && work.length) {
@@ -2778,9 +2823,10 @@ async function eventDepthCampfire() {
   }
 }
 async function eventDepthMilestone() {
-  // 節目イベントは深層ボスの「直後の階」(31/41/51/61...) で1度だけ発火。
-  // 深層ボス階(30/40/50)で連続発火するとテンポが悪いため位置をずらした。
-  if (!isEndlessMode() || player.floor < 31 || (player.floor - 1) % 10 !== 0) return;
+  // plus8: 節目イベントを 5階ごとのボス直後階に拡張。
+  // 旧（plus6/plus7）: 31/41/51/61F のみ → 35Fと40Fの間に補給機会が無く40F前の準備不足
+  // 新: 31/36/41/46/51/56/... ボス→翌階で必ず1度発火（同一階で重複発火はしない）
+  if (!isEndlessMode() || player.floor < 31 || (player.floor - 1) % 5 !== 0) return;
   if (!runStats.milestoneFloors) runStats.milestoneFloors = {};
   if (runStats.milestoneFloors[player.floor]) return;
   runStats.milestoneFloors[player.floor] = true;
@@ -2793,7 +2839,7 @@ async function eventDepthMilestone() {
 }
 // 節目イベントを発火すべき階か（メインループからの判定用）
 function isMilestoneFloor(f) {
-  return isEndlessMode() && f >= 31 && (f - 1) % 10 === 0;
+  return isEndlessMode() && f >= 31 && (f - 1) % 5 === 0;
 }
 
 const EVENTS_NORMAL = [
@@ -3782,6 +3828,11 @@ function buildRunSummary(kind, score, reason) {
     const def = memoryDef(id); return def ? def.name : id;
   });
   const lootChoices = (runStats.eliteLootChoices || []).map(c => c.label);
+  // plus8: 深層調整確認用の数値
+  const mul = depthScaleMultipliers(player.floor);
+  const milestoneFloors = (runStats && runStats.milestoneFloors)
+    ? Object.keys(runStats.milestoneFloors).filter(k => runStats.milestoneFloors[k]).map(Number).sort((a,b)=>a-b)
+    : [];
   return {
     version: APP_VERSION,
     mode: player.mode,
@@ -3807,6 +3858,14 @@ function buildRunSummary(kind, score, reason) {
     evaluation: determineRunEvaluation(kind),
     replayLine: buildReplayLine(),
     deathHint: kind === "loss" ? buildDeathHint(kind) : "",
+    // 深層調整確認用
+    depthScaleHp:  Math.round(mul.hp  * 1000) / 1000,
+    depthScaleAtk: Math.round(mul.atk * 1000) / 1000,
+    depthMilestoneCount: milestoneFloors.length,
+    depthMilestoneFloors: milestoneFloors,
+    forgeCap: typeof forgeLimit === "function" ? forgeLimit() : null,
+    currentWeaponEnhance: player.weaponEnhance || 0,
+    currentArmorEnhance:  player.armorEnhance || 0,
     reason,
     date: new Date().toISOString(),
   };
