@@ -482,7 +482,7 @@ input.text-input:focus { border-color: var(--accent); }
 // ====================================================================
 const FINAL_FLOOR = 20;
 const BOSS_FLOORS = new Set([5, 10, 15, 20]);
-const APP_VERSION = "v20260510-rogue-plus6";
+const APP_VERSION = "v20260510-rogue-plus7";
 // 開発確認用：URLに ?debug=1 が付いているときだけ有効化する。
 // 通常プレイでは false 固定で、UIも出ない。
 const DEBUG_MODE = (() => {
@@ -685,7 +685,7 @@ const ELITE_AFFIXES = [
   { id: "venom",   name: "毒霧の",     hpMul: 1.15, atkMul: 1.05, defAdd: 0, expMul: 1.0, goldMul: 1.2,
     addTags: ["poison"], extraDrops: [["毒消し草", 0.50], ["ポーション", 0.30]] },
   { id: "treasure",name: "財宝持ちの", hpMul: 1.10, atkMul: 1.00, defAdd: 0, expMul: 1.0, goldMul: 2.5 },
-  { id: "depth",   name: "深層の",     hpMul: 1.40, atkMul: 1.15, defAdd: 2, expMul: 1.5, goldMul: 2.0, depthOnly: true },
+  { id: "depth",   name: "深層の",     hpMul: 1.30, atkMul: 1.12, defAdd: 2, expMul: 1.5, goldMul: 2.0, depthOnly: true },
 ];
 
 const BLESSINGS = [
@@ -2737,8 +2737,9 @@ function buildEliteLootPool(m) {
 }
 async function maybeOfferEliteLoot(m) {
   const isEndless = isEndlessMode();
-  const baseRate = isEndless ? 0.60 : 0.40;
-  const depthBonus = (m && m.elite === "depth") ? 0.15 : 0;
+  // plus7: 報酬密度の調整（本編40→35%、深層60→50%、深層affix +15→+10pp）
+  const baseRate = isEndless ? 0.50 : 0.35;
+  const depthBonus = (m && m.elite === "depth") ? 0.10 : 0;
   if (Math.random() >= (baseRate + depthBonus)) return;
   const pool = buildEliteLootPool(m);
   const opts = [];
@@ -3675,22 +3676,9 @@ function buildReplayLine() {
   const stage = isEndless ? "深層" : "迷宮";
   const forged = (runStats.forgeWeaponCount || 0) + (runStats.forgeArmorCount || 0);
   const blessed = (runStats.blessingChoices || []).length;
-  // plus6: 記憶効果やエリート撃破による上書きを優先
   const owned = (player.memoryEffects || []);
-  if (owned.length > 0) {
-    const def = memoryDef(owned[owned.length - 1]);
-    const name = def ? def.name : owned[owned.length - 1];
-    if (player.cls === "戦士" && (owned.includes("counter_strike") || owned.includes("iron_wall"))) {
-      return `戦士は${name}を宿し、${stage}の敵を押し返した。`;
-    }
-    if (player.cls === "盗賊" && (owned.includes("merchant_eye") || owned.includes("swift_flee"))) {
-      return `盗賊は${name}を頼りに、${stage}を駆け抜けた。`;
-    }
-    if (player.cls === "魔導士" && (owned.includes("incantation") || owned.includes("insight"))) {
-      return `魔導士は${name}をまとい、${stage}の力を引き出した。`;
-    }
-    return `${player.cls}は${name}を抱え、${stage}を歩んだ。`;
-  }
+  // plus7: クラス固有の高シグナル（鍛冶連発/反撃多用/逃走多用等）を先に判定し、
+  // 記憶効果は「他に強い成果がない時」のフォールバックに格下げした。
   if ((runStats.eliteKills || 0) >= 3) {
     return `数々の強敵を退け、その足跡は深く刻まれた。`;
   }
@@ -3699,24 +3687,35 @@ function buildReplayLine() {
     if ((runStats.warriorCounters || 0) >= 5) return `戦士は反撃を磨き、迫る牙を退けた。`;
     if ((runStats.warriorBossKills || 0) >= 2) return `戦士はボスの首を獲り、勇名を響かせた。`;
     if (blessed >= 3) return `戦士は祝福を重ね、迷宮の試練を越えた。`;
-    return `戦士は剣を握り、B${player.floor}Fまで歩を進めた。`;
-  }
-  if (player.cls === "盗賊") {
+  } else if (player.cls === "盗賊") {
     if ((runStats.rogueEscapes || 0) >= 4 || (runStats.fleeSuccessCount || 0) >= 4)
       return `盗賊は煙に紛れ、危地を幾度もすり抜けた。`;
     if ((runStats.rogueTrapAvoids || 0) >= 3) return `盗賊は罠を避け、宝を抱えて${stage}を駆けた。`;
     if ((runStats.rogueGoodLoots || 0) + (runStats.rogueDiscounts || 0) >= 4)
       return `盗賊は目利きを利かせ、${stage}の値を見抜いた。`;
     if ((runStats.totalGoldGained || 0) >= 600) return `盗賊は金貨を積み上げ、影を渡った。`;
-    return `盗賊は静かに歩み、B${player.floor}Fまで駆けた。`;
-  }
-  if (player.cls === "魔導士") {
+  } else if (player.cls === "魔導士") {
     if ((runStats.scrollUseCount || 0) >= 5) return `魔導士は巻物を解き放ち、敵を焼き尽くした。`;
     if ((runStats.mageScrollSaves || 0) >= 3) return `魔導士は節約の術で、巻物の力を残した。`;
     if ((runStats.mageEventInsights || 0) >= 3) return `魔導士は叡智で${stage}の謎を読み解いた。`;
     if (forged >= 2) return `魔導士は杖を整え、深い記憶へ降りていった。`;
-    return `魔導士は呪文を唱え、B${player.floor}Fまで進んだ。`;
   }
+  // クラス固有シグナルなし → 記憶効果の有無で文を変える
+  if (owned.length > 0) {
+    const def = memoryDef(owned[owned.length - 1]);
+    const name = def ? def.name : owned[owned.length - 1];
+    if (player.cls === "戦士"   && (owned.includes("counter_strike") || owned.includes("iron_wall")))
+      return `戦士は${name}を宿し、${stage}の敵を押し返した。`;
+    if (player.cls === "盗賊"   && (owned.includes("merchant_eye")   || owned.includes("swift_flee")))
+      return `盗賊は${name}を頼りに、${stage}を駆け抜けた。`;
+    if (player.cls === "魔導士" && (owned.includes("incantation")    || owned.includes("insight")))
+      return `魔導士は${name}をまとい、${stage}の力を引き出した。`;
+    return `${player.cls}は${name}を抱え、${stage}を歩んだ。`;
+  }
+  // 既定フォールバック
+  if (player.cls === "戦士")   return `戦士は剣を握り、B${player.floor}Fまで歩を進めた。`;
+  if (player.cls === "盗賊")   return `盗賊は静かに歩み、B${player.floor}Fまで駆けた。`;
+  if (player.cls === "魔導士") return `魔導士は呪文を唱え、B${player.floor}Fまで進んだ。`;
   return `${player.name}は${stage}のB${player.floor}Fまで歩んだ。`;
 }
 function buildDeathHint(kind) {
@@ -3774,6 +3773,43 @@ function computeScore(kind) {
     ? player.gold + player.level * 100 + player.max_hp * 5
     : player.gold + player.level * 50 + player.floor * 30;
   return Math.floor(base * diffCfg().scoreMul);
+}
+
+// plus7: 調整用ランサマリー（?debug=1 のときだけ終了カードから取得できる）
+function buildRunSummary(kind, score, reason) {
+  if (!player || !runStats) return null;
+  const owned = (player.memoryEffects || []).map(id => {
+    const def = memoryDef(id); return def ? def.name : id;
+  });
+  const lootChoices = (runStats.eliteLootChoices || []).map(c => c.label);
+  return {
+    version: APP_VERSION,
+    mode: player.mode,
+    class: player.cls,
+    difficulty: player.difficulty,
+    result: kind,
+    floor: player.floor,
+    score,
+    kills: runStats.kills || 0,
+    bossKills: runStats.warriorBossKills || 0,
+    depthBossKills: runStats.depthBossKills || 0,
+    eliteEncounters: runStats.eliteEncounters || 0,
+    eliteKills: runStats.eliteKills || 0,
+    eliteLootCount: runStats.eliteLootCount || 0,
+    eliteLootChoices: lootChoices,
+    memoryEffects: owned,
+    blessingCount: runStats.blessingCount || 0,
+    forgeWeaponCount: runStats.forgeWeaponCount || 0,
+    forgeArmorCount: runStats.forgeArmorCount || 0,
+    forgeGoldSpent: runStats.forgeGoldSpent || 0,
+    goldEnd: player.gold || 0,
+    miniGoalAchieved: !!(runStats.miniGoalCompleted),
+    evaluation: determineRunEvaluation(kind),
+    replayLine: buildReplayLine(),
+    deathHint: kind === "loss" ? buildDeathHint(kind) : "",
+    reason,
+    date: new Date().toISOString(),
+  };
 }
 
 function buildEndCard(kind, reason) {
@@ -3953,7 +3989,41 @@ function buildEndCard(kind, reason) {
     ${shardBlock}
     ${badges}
     <p style="margin-top:14px; font-style:italic; color:var(--dim);">${tagline}</p>
+    ${DEBUG_MODE ? `<div id="run-summary-block" style="margin-top:14px; padding:8px 10px; background:rgba(255,212,94,0.05); border:1px dashed #6a4a10; border-radius:8px; text-align:left;">
+      <div style="font-size:11px; color:#ffd45e; margin-bottom:4px;">🛠 開発確認用：ランサマリー</div>
+      <button id="run-summary-copy" style="font-size:11px; padding:4px 10px; background:#2a1a05; color:#ffd45e; border:1px solid #6a4a10; border-radius:4px;">📋 サマリーを表示＆コピー</button>
+      <textarea id="run-summary-text" style="display:none; width:100%; min-height:160px; margin-top:6px; font-size:11px; font-family:monospace; background:#0d0c1a; color:#e6e6f0; border:1px solid #3a3760; border-radius:4px; padding:6px;" readonly></textarea>
+    </div>` : ""}
   </div>`;
+}
+
+function attachRunSummaryHandler(kind, score, reason) {
+  if (!DEBUG_MODE) return;
+  const btn = document.getElementById("run-summary-copy");
+  const ta  = document.getElementById("run-summary-text");
+  if (!btn || !ta) return;
+  btn.onclick = () => {
+    const summary = buildRunSummary(kind, score, reason);
+    const json = JSON.stringify(summary, null, 2);
+    ta.value = json;
+    ta.style.display = "block";
+    console.log("[run summary]", summary);
+    // Clipboard API（HTTPS時のみ動作。失敗時は textarea を手動コピー）
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(json).then(
+          () => tell("ランサマリーをクリップボードへコピーした。", "shop"),
+          () => tell("クリップボードコピー失敗。textarea から手動コピーで。", "dim")
+        );
+      } else {
+        ta.focus(); ta.select();
+        tell("textarea を選択した。手動でコピーしてほしい。", "dim");
+      }
+    } catch (e) {
+      ta.focus(); ta.select();
+      console.warn("[run summary] clipboard fail", e);
+    }
+  };
 }
 
 function captureNewAchievements(fn) {
@@ -3997,6 +4067,7 @@ async function ending() {
   $status.style.display = "none";
   clearNarrative(); clearActions();
   tellRaw(buildEndCard("win", reason));
+  attachRunSummaryHandler("win", computeScore("win"), reason);
   $actions.innerHTML = `
     <button class="btn primary" id="btn-restart">もう一度遊ぶ</button>
     <button class="btn small" id="btn-records">冒険記録を見る</button>
@@ -4023,6 +4094,7 @@ async function gameOver() {
 
   clearNarrative(); clearActions();
   tellRaw(buildEndCard("loss", reason));
+  attachRunSummaryHandler("loss", computeScore("loss"), reason);
   $actions.innerHTML = `
     <button class="btn primary" id="btn-restart">もう一度遊ぶ</button>
     <button class="btn small" id="btn-records">冒険記録を見る</button>
