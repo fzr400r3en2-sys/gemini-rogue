@@ -482,7 +482,7 @@ input.text-input:focus { border-color: var(--accent); }
 // ====================================================================
 const FINAL_FLOOR = 20;
 const BOSS_FLOORS = new Set([5, 10, 15, 20]);
-const APP_VERSION = "v20260510-rogue-plus8";
+const APP_VERSION = "v20260510-rogue-plus9";
 // 開発確認用：URLに ?debug=1 が付いているときだけ有効化する。
 // 通常プレイでは false 固定で、UIも出ない。
 const DEBUG_MODE = (() => {
@@ -1076,6 +1076,13 @@ function newRunStats(mode = "story") {
     eliteLootChoices: [],      // [{id,label,floor}]
     eliteLootCount: 0,         // 戦利品3択を実際に選んだ回数
     eliteLootMemoryCount: 0,   // 戦利品3択で記憶効果を選んだ回数
+    // plus9: 40F局所緩和の追跡
+    bossBreakpointTuned: false,     // 40Fボス専用補正が実際に適用されたか
+    preF40PreparationUsed: false,   // 36F節目で40F準備3択を引き終わったか
+    currentBossFloor: null,
+    bossHp: null,
+    bossAtk: null,
+    currentBossBreakpointTuned: false,
     // ビルド・鍛冶・祝福
     blessingChoices: [],
     blessingCount: 0,
@@ -1138,6 +1145,13 @@ function normalizeRunStats(rs) {
   if (!Array.isArray(out.eliteLootChoices)) out.eliteLootChoices = [];
   if (typeof out.eliteLootCount !== "number") out.eliteLootCount = 0;
   if (typeof out.eliteLootMemoryCount !== "number") out.eliteLootMemoryCount = 0;
+  // plus9
+  if (typeof out.bossBreakpointTuned   !== "boolean") out.bossBreakpointTuned   = false;
+  if (typeof out.preF40PreparationUsed !== "boolean") out.preF40PreparationUsed = false;
+  if (typeof out.currentBossFloor !== "number") out.currentBossFloor = null;
+  if (typeof out.bossHp !== "number") out.bossHp = null;
+  if (typeof out.bossAtk !== "number") out.bossAtk = null;
+  if (typeof out.currentBossBreakpointTuned !== "boolean") out.currentBossBreakpointTuned = false;
   [
     "classFeatureTriggers",
     "warriorCounters", "warriorDefends", "warriorBossKills",
@@ -1298,7 +1312,18 @@ function makeEndlessBoss(floor) {
   const bossKey = depthBossKeyFor(floor);
   const m = makeMonster(bossKey);
   if (DEPTH_BOSS_NAMES[bossKey]) m.name = DEPTH_BOSS_NAMES[bossKey];
+  applyEndlessBossBreakpointTuning(m, floor);
   return m;
+}
+// plus9: 40F深層ボスだけ局所緩和。「少しも超えられない壁」から
+// 「準備すれば突破できる節目」へ。35F以前・45F以降・本編20Fには影響しない。
+// 例: 標準難易度 HP 988→829, ATK 66→58 / 挑戦 HP 1040→873, ATK 74→65
+function applyEndlessBossBreakpointTuning(m, floor) {
+  if (!m || floor !== 40) return;
+  m.hp  = Math.max(1, Math.floor(m.hp  * 0.84));
+  m.atk = Math.max(1, Math.floor(m.atk * 0.88));
+  m.bossBreakpointTuned = true;
+  if (runStats) runStats.bossBreakpointTuned = true;
 }
 
 function makeMonster(name) {
@@ -2607,10 +2632,23 @@ async function eventForge(discount = 1, title = "鍛冶屋") {
   tell(`鍛冶の火花が散った。${label} は +${before + 1} になった。`, "gold");
   saveGame();
 }
-function blessingOptions(isEndless = false) {
+function blessingOptions(isEndless = false, prepFloor = null) {
+  // plus9: prepFloor === 35 のときだけ、40F準備系の祝福重みを少し上げる。
+  // 物語/標準は40F挑戦のため、挑戦は依然として運要素を残すバランス。
+  const isPrep35 = (prepFloor === 35);
   const pool = BLESSINGS
     .filter(b => b.id !== "forge" || canEnhance("weapon", 1, true) || canEnhance("armor", 1, true))
-    .map(b => [b, isEndless && b.endlessWeight ? b.endlessWeight : b.weight]);
+    .map(b => {
+      let w = isEndless && b.endlessWeight ? b.endlessWeight : b.weight;
+      if (isPrep35) {
+        if (b.id === "forge")      w *= 1.6;
+        if (b.id === "life")       w *= 1.4;
+        if (b.id === "apothecary") w *= 1.3;
+        if (b.id === "wisdom")     w *= 1.3;
+        if (b.id === "shield")     w *= 1.2;
+      }
+      return [b, w];
+    });
   const picked = [];
   const work = [...pool];
   while (picked.length < 3 && work.length > 0) {
@@ -2620,6 +2658,74 @@ function blessingOptions(isEndless = false) {
     if (pos >= 0) work.splice(pos, 1);
   }
   return picked;
+}
+function buildDepth35BossPrepPool(existingOptions = []) {
+  const pool = [];
+  if (canEnhance("armor", 1, true)) {
+    pool.push({
+      id: "prep35_armor", name: "守りの鍛冶記憶", desc: "防具 +1",
+      apply: () => {
+        enhanceEquipment("armor", { free: true, source: "depth35_prep" });
+        return `${equipLabel("armor")} が強化された。`;
+      },
+    });
+  }
+  if (canEnhance("weapon", 1, true)) {
+    pool.push({
+      id: "prep35_weapon", name: "刃の鍛冶記憶", desc: "武器 +1",
+      apply: () => {
+        enhanceEquipment("weapon", { free: true, source: "depth35_prep" });
+        return `${equipLabel("weapon")} が強化された。`;
+      },
+    });
+  }
+  pool.push({
+    id: "prep35_life", name: "深層の生命記憶", desc: "最大HP +10 / HP +10",
+    apply: () => {
+      player.max_hp += 10;
+      player.hp = Math.min(player.max_hp, player.hp + 10);
+      return "最大HPが10上昇した。";
+    },
+  });
+  pool.push({
+    id: "prep35_potion", name: "古龍の薬包", desc: "ポーション +1",
+    apply: () => {
+      player.inventory.push("ポーション");
+      return "ポーションを得た。";
+    },
+  });
+  if (canAddMemory()) {
+    const owned = player.memoryEffects || [];
+    const alreadyOffered = existingOptions
+      .filter(o => o && o.isMemory && o.memoryDef)
+      .map(o => o.memoryDef.id);
+    const candidates = MEMORY_EFFECTS.filter(e =>
+      owned.indexOf(e.id) < 0 && alreadyOffered.indexOf(e.id) < 0
+    );
+    if (candidates.length > 0) {
+      const def = choice(candidates);
+      pool.push({
+        id: "prep35_memory:" + def.id,
+        name: `記憶効果: ${def.name}`,
+        desc: def.desc,
+        isMemory: true,
+        memoryDef: def,
+      });
+    }
+  }
+  return pool;
+}
+function injectDepth35BossPrepOption(options) {
+  if (!Array.isArray(options) || options.length === 0) return options;
+  const pool = buildDepth35BossPrepPool(options);
+  if (pool.length === 0) return options;
+  const out = options.slice();
+  const candidate = choice(pool);
+  const prepIds = new Set(["forge", "life", "apothecary"]);
+  let replaceAt = out.findIndex(o => o && !o.isMemory && !prepIds.has(o.id));
+  if (replaceAt < 0) replaceAt = out.length - 1;
+  out[replaceAt] = candidate;
+  return out;
 }
 function applyBlessing(b) {
   if (!b || !player) return "";
@@ -2665,7 +2771,9 @@ function applyBlessing(b) {
 }
 async function offerBlessingChoice(sourceLabel) {
   const isEndless = isEndlessMode();
-  const options = blessingOptions(isEndless);
+  // plus9: 深層35Fボス勝利時のみ、40F準備系の祝福重みを少し上げて引きやすくする
+  const prepFloor = (isEndless && player && player.floor === 35) ? 35 : null;
+  let options = blessingOptions(isEndless, prepFloor);
   if (options.length === 0) return;
   // plus6: 記憶効果の上限に空きがあれば、低確率で1枠を記憶効果候補に置換
   // 本編 20% / 深層 40%（深層は出やすめ）
@@ -2687,12 +2795,15 @@ async function offerBlessingChoice(sourceLabel) {
       }
     }
   }
+  if (prepFloor === 35) options = injectDepth35BossPrepOption(options);
   tellEvent("✦ 記憶の祝福", `${sourceLabel}の記憶が形を成す。1つ選べ。`, "shop");
   const idx = await ask(options.map(b => ({ label: b.name, desc: b.desc })));
   const chosen = options[idx];
   let result = "";
   if (chosen.isMemory) {
     addMemoryEffect(chosen.memoryDef.id, sourceLabel);
+  } else if (typeof chosen.apply === "function") {
+    result = chosen.apply();
   } else {
     result = applyBlessing(chosen);
   }
@@ -2822,14 +2933,92 @@ async function eventDepthCampfire() {
     await offerMinorDepthBlessing("深層の焚き火");
   }
 }
+// plus9: 36F専用の40F挑戦準備3択。3つの候補すべてが40F対策に寄与するよう構成。
+// 鍛冶上限・記憶上限はガード済み。preF40PreparationUsed フラグで記録。
+async function offerF40PrepChoice(sourceLabel) {
+  const pool = [];
+  pool.push({
+    id: "prep_heal", name: "生命の脈動", desc: "HPを大きく回復",
+    apply: () => {
+      const g = heal(player, Math.max(15, Math.floor(player.max_hp * 0.40)));
+      return `HPが ${g} 回復した。`;
+    },
+  });
+  pool.push({
+    id: "prep_vitality", name: "鋼の鼓動", desc: "最大HP +8",
+    apply: () => {
+      player.max_hp += 8;
+      player.hp = Math.min(player.max_hp, player.hp + 8);
+      return "最大HPが8上昇した。";
+    },
+  });
+  pool.push({
+    id: "prep_potion", name: "薬箱の記憶", desc: "ポーション ×1",
+    apply: () => {
+      player.inventory.push("ポーション");
+      return "ポーションを得た。";
+    },
+  });
+  if (canEnhance("weapon", 1, true) || canEnhance("armor", 1, true)) {
+    pool.push({
+      id: "prep_forge", name: "鎚の記憶", desc: "武器か防具を +1",
+      apply: () => {
+        const slots = ["weapon", "armor"].filter(s => canEnhance(s, 1, true));
+        const slot = slots.length === 2
+          ? (getEnhance("weapon") <= getEnhance("armor") ? "weapon" : "armor")
+          : slots[0];
+        if (!slot) return "鍛える装備がなかった。";
+        enhanceEquipment(slot, { free: true, source: "f40_prep" });
+        return `${slot === "weapon" ? equipLabel("weapon") : equipLabel("armor")} が強化された。`;
+      },
+    });
+  }
+  if (canAddMemory()) {
+    const owned = player.memoryEffects || [];
+    const candidates = MEMORY_EFFECTS.filter(e => owned.indexOf(e.id) < 0);
+    if (candidates.length > 0) {
+      const def = choice(candidates);
+      pool.push({
+        id: "prep_memory:" + def.id,
+        name: `記憶効果: ${def.name}`,
+        desc: def.desc,
+        apply: () => { addMemoryEffect(def.id, "B36F前準備"); return ""; },
+        isMemory: true,
+      });
+    }
+  }
+  const opts = [];
+  const work = [...pool];
+  while (opts.length < 3 && work.length) {
+    const i = rand(work.length);
+    opts.push(work.splice(i, 1)[0]);
+  }
+  tellEvent(sourceLabel, "40Fの気配が濃い。挑戦前の備えを1つ選べ。", "shop");
+  const idx = await ask(opts.map(o => ({ label: o.name, desc: o.desc })));
+  const chosen = opts[idx];
+  const result = chosen.apply();
+  if (runStats) {
+    runStats.blessingChoices = runStats.blessingChoices || [];
+    runStats.blessingChoices.push({ id: chosen.id, name: chosen.name, floor: player.floor, source: sourceLabel });
+    runStats.preF40PreparationUsed = true;
+    addRunStat("blessingCount", 1, false);
+  }
+  if (result) tell(`${chosen.name}を選んだ。${result}`, "gold");
+  renderStatus();
+  saveGame();
+}
+
 async function eventDepthMilestone() {
   // plus8: 節目イベントを 5階ごとのボス直後階に拡張。
-  // 旧（plus6/plus7）: 31/41/51/61F のみ → 35Fと40Fの間に補給機会が無く40F前の準備不足
-  // 新: 31/36/41/46/51/56/... ボス→翌階で必ず1度発火（同一階で重複発火はしない）
+  // plus9: 36F は40F挑戦専用の準備3択に差し替える（プールはランダムだが全候補がF40対策）。
   if (!isEndlessMode() || player.floor < 31 || (player.floor - 1) % 5 !== 0) return;
   if (!runStats.milestoneFloors) runStats.milestoneFloors = {};
   if (runStats.milestoneFloors[player.floor]) return;
   runStats.milestoneFloors[player.floor] = true;
+  if (player.floor === 36) {
+    await offerF40PrepChoice("✦ 40F挑戦前の準備");
+    return;
+  }
   const events = [
     eventDepthCampfire,
     () => eventForge(0.8, "忘れられた鍛冶場"),
@@ -2866,6 +3055,13 @@ async function eventBoss() {
   } else {
     bossKey = bossFor(player.floor);
     m = makeMonster(bossKey);
+  }
+  if (runStats) {
+    runStats.currentBossFloor = player.floor;
+    runStats.bossHp = m.hp;
+    runStats.bossAtk = m.atk;
+    runStats.currentBossBreakpointTuned = !!m.bossBreakpointTuned;
+    if (m.bossBreakpointTuned) runStats.bossBreakpointTuned = true;
   }
   const headline = isEndless ? `☠ B${player.floor}F 深層ボス：${m.name}` : `☠ B${player.floor}F ボス：${m.name}`;
   tellEvent(headline, `${m.flavor}\n\n──── これより先、逃げる事は叶わない。`, "boss");
@@ -3866,6 +4062,13 @@ function buildRunSummary(kind, score, reason) {
     forgeCap: typeof forgeLimit === "function" ? forgeLimit() : null,
     currentWeaponEnhance: player.weaponEnhance || 0,
     currentArmorEnhance:  player.armorEnhance || 0,
+    // plus9: 40F局所緩和の確認用
+    currentBossFloor: runStats.currentBossFloor,
+    bossHp: runStats.bossHp,
+    bossAtk: runStats.bossAtk,
+    bossBreakpointTuned:   !!(runStats.bossBreakpointTuned),
+    currentBossBreakpointTuned: !!(runStats.currentBossBreakpointTuned),
+    preF40PreparationUsed: !!(runStats.preF40PreparationUsed),
     reason,
     date: new Date().toISOString(),
   };
@@ -4189,6 +4392,10 @@ function initDebugBar() {
       <button data-floor="21">21</button>
       <button data-floor="25">25</button>
       <button data-floor="30">30</button>
+      <button data-floor="35">35</button>
+      <button data-floor="36">36</button>
+      <button data-floor="40">40</button>
+      <button data-floor="45">45</button>
     </div>
     <button id="dbg-gold">+100G</button>
     <button id="dbg-hp">Full HP</button>
@@ -4294,6 +4501,9 @@ function initDebugBar() {
       depthBoss: runStats ? runStats.depthBossKills : 0,
       blessings: runStats ? (runStats.blessingChoices || []).length : 0,
       mini: (runStats && runStats.miniGoal) ? `${runStats.miniGoal.text} ${miniGoalProgress()}/${runStats.miniGoal.target}` : "なし",
+      boss: runStats && runStats.currentBossFloor
+        ? `B${runStats.currentBossFloor}F HP${runStats.bossHp} ATK${runStats.bossAtk} tuned=${!!runStats.currentBossBreakpointTuned}`
+        : "未遭遇",
     };
     dump.memories = (player.memoryEffects || []).map(id => (memoryDef(id) ? memoryDef(id).name : id)).join(",") || "なし";
     dump.elite = runStats ? `遭遇${runStats.eliteEncounters||0} 撃破${runStats.eliteKills||0} 戦利品${runStats.eliteLootCount||0}` : "—";
@@ -4301,6 +4511,7 @@ function initDebugBar() {
     dlog(`mode=${dump.mode} F${dump.floor} HP${dump.hp} G${dump.gold} 攻防${dump.atk}/${dump.def}`);
     dlog(`武=${dump.weapon} 防=${dump.armor} 撃破${dump.kills} 深層B${dump.depthBoss} 祝福${dump.blessings}`);
     dlog(`記憶=${dump.memories} エリート=${dump.elite}`);
+    dlog(`直近ボス=${dump.boss}`);
     dlog(`目標=${dump.mini}`);
   };
   document.getElementById("dbg-toggle").onclick = () => bar.classList.toggle("collapsed");
@@ -4327,12 +4538,16 @@ async function gameLoop() {
             await offerBlessingChoice("debug");
           } else if (ev === "milestone") {
             // eventDepthMilestone のガードを避けて中身を直接呼ぶ
-            const fns = [
-              eventDepthCampfire,
-              () => eventForge(0.8, "忘れられた鍛冶場"),
-              () => offerMinorDepthBlessing("記憶の分岐路"),
-            ];
-            await fns[Math.floor(Math.random() * fns.length)]();
+            if (player && player.floor === 36) {
+              await offerF40PrepChoice("✦ 40F挑戦前の準備");
+            } else {
+              const fns = [
+                eventDepthCampfire,
+                () => eventForge(0.8, "忘れられた鍛冶場"),
+                () => offerMinorDepthBlessing("記憶の分岐路"),
+              ];
+              await fns[Math.floor(Math.random() * fns.length)]();
+            }
           } else if (ev === "loot") {
             // ガードを無視してエリート戦利品3択を強制呼出（plus6 デバッグ）
             const pool = buildEliteLootPool({ elite: "depth" });
