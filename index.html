@@ -482,7 +482,7 @@ input.text-input:focus { border-color: var(--accent); }
 // ====================================================================
 const FINAL_FLOOR = 20;
 const BOSS_FLOORS = new Set([5, 10, 15, 20]);
-const APP_VERSION = "v20260510-rogue-plus9";
+const APP_VERSION = "v20260510-rogue-plus10";
 // 開発確認用：URLに ?debug=1 が付いているときだけ有効化する。
 // 通常プレイでは false 固定で、UIも出ない。
 const DEBUG_MODE = (() => {
@@ -1083,6 +1083,14 @@ function newRunStats(mode = "story") {
     bossHp: null,
     bossAtk: null,
     currentBossBreakpointTuned: false,
+    // plus10: 深層ビルド自由度回復の追跡
+    depthWeaponSupportUsed: false,
+    depthArmorSupportUsed: false,
+    depthClassSupportUsed: false,
+    depthStoryAssistApplied: false,
+    depthSupportReasons: [],
+    f35BossTuned: false,
+    f40BossTuned: false,
     // ビルド・鍛冶・祝福
     blessingChoices: [],
     blessingCount: 0,
@@ -1152,6 +1160,14 @@ function normalizeRunStats(rs) {
   if (typeof out.bossHp !== "number") out.bossHp = null;
   if (typeof out.bossAtk !== "number") out.bossAtk = null;
   if (typeof out.currentBossBreakpointTuned !== "boolean") out.currentBossBreakpointTuned = false;
+  // plus10
+  if (typeof out.depthWeaponSupportUsed !== "boolean") out.depthWeaponSupportUsed = false;
+  if (typeof out.depthArmorSupportUsed  !== "boolean") out.depthArmorSupportUsed  = false;
+  if (typeof out.depthClassSupportUsed  !== "boolean") out.depthClassSupportUsed  = false;
+  if (typeof out.depthStoryAssistApplied !== "boolean") out.depthStoryAssistApplied = false;
+  if (!Array.isArray(out.depthSupportReasons)) out.depthSupportReasons = [];
+  if (typeof out.f35BossTuned !== "boolean") out.f35BossTuned = false;
+  if (typeof out.f40BossTuned !== "boolean") out.f40BossTuned = false;
   [
     "classFeatureTriggers",
     "warriorCounters", "warriorDefends", "warriorBossKills",
@@ -1193,6 +1209,10 @@ function normalizePlayer(p) {
   if (p.mode !== "story" && p.mode !== "endless") p.mode = "story";
   if (typeof p.weaponEnhance !== "number" || p.weaponEnhance < 0) p.weaponEnhance = 0;
   if (typeof p.armorEnhance !== "number" || p.armorEnhance < 0) p.armorEnhance = 0;
+  if (typeof p.depthWeaponBoost !== "number" || p.depthWeaponBoost < 0) p.depthWeaponBoost = 0;
+  if (typeof p.depthArmorBoost  !== "number" || p.depthArmorBoost  < 0) p.depthArmorBoost  = 0;
+  p.depthWeaponBoost = Math.min(3, Math.floor(p.depthWeaponBoost));
+  p.depthArmorBoost  = Math.min(3, Math.floor(p.depthArmorBoost));
   const lim = p.mode === "endless" ? ENDLESS_FORGE_LIMIT : STORY_FORGE_LIMIT;
   p.weaponEnhance = Math.min(lim, Math.floor(p.weaponEnhance));
   p.armorEnhance = Math.min(lim, Math.floor(p.armorEnhance));
@@ -1302,6 +1322,10 @@ function scaleMonsterForDepth(m, floor, mode) {
   const depth = floor - 20;
   m.hp  = Math.max(1, Math.floor(m.hp  * mul.hp));
   m.atk = Math.max(1, Math.floor(m.atk * mul.atk));
+  if (currentDifficulty() === "story" && !isEndlessBossFloor(floor)) {
+    m.atk = Math.max(1, Math.floor(m.atk * 0.95));
+    if (runStats) runStats.depthStoryAssistApplied = true;
+  }
   m.defense += Math.floor(floor / 10);
   // 報酬は据え置き（線形）：プレイヤー側の成長余地を確保
   m.exp  = Math.max(1, Math.floor(m.exp  * (1 + depth * 0.05)));
@@ -1315,15 +1339,27 @@ function makeEndlessBoss(floor) {
   applyEndlessBossBreakpointTuning(m, floor);
   return m;
 }
-// plus9: 40F深層ボスだけ局所緩和。「少しも超えられない壁」から
-// 「準備すれば突破できる節目」へ。35F以前・45F以降・本編20Fには影響しない。
-// 例: 標準難易度 HP 988→829, ATK 66→58 / 挑戦 HP 1040→873, ATK 74→65
+// plus10: 35Fは軽く、40Fはplus9のまま局所調整。25/30/45F以降・本編20Fには影響しない。
+// 35F例: 標準 HP 491→441, ATK 45→42 / 挑戦 HP 517→465, ATK 51→47
+// 40F例: 標準 HP 988→829, ATK 66→58 / 挑戦 HP 1040→873, ATK 74→65
 function applyEndlessBossBreakpointTuning(m, floor) {
-  if (!m || floor !== 40) return;
+  if (!m) return;
+  if (floor === 35) {
+    m.hp  = Math.max(1, Math.floor(m.hp  * 0.90));
+    m.atk = Math.max(1, Math.floor(m.atk * 0.94));
+    m.f35BossTuned = true;
+    if (runStats) runStats.f35BossTuned = true;
+    return;
+  }
+  if (floor !== 40) return;
   m.hp  = Math.max(1, Math.floor(m.hp  * 0.84));
   m.atk = Math.max(1, Math.floor(m.atk * 0.88));
   m.bossBreakpointTuned = true;
-  if (runStats) runStats.bossBreakpointTuned = true;
+  m.f40BossTuned = true;
+  if (runStats) {
+    runStats.bossBreakpointTuned = true;
+    runStats.f40BossTuned = true;
+  }
 }
 
 function makeMonster(name) {
@@ -1369,13 +1405,76 @@ function newPlayer(name, cls) {
 }
 function pAtk(p) {
   let a = p.base_atk + (p.weapon && ITEMS[p.weapon] ? ITEMS[p.weapon].atk : 0) + (p.weaponEnhance || 0);
+  if (p.mode === "endless") a += p.depthWeaponBoost || 0;
   for (const e of p.effects) if (e.name === "buff_atk") a += e.power;
   return a;
 }
 function pDef(p) {
   let d = p.base_def + (p.armor && ITEMS[p.armor] ? ITEMS[p.armor].defense : 0) + (p.armorEnhance || 0);
+  if (p.mode === "endless") d += p.depthArmorBoost || 0;
   for (const e of p.effects) if (e.name === "buff_def") d += e.power;
   return d;
+}
+function depthWeaponPower(p = player) {
+  return (p && p.weapon && ITEMS[p.weapon] ? ITEMS[p.weapon].atk : 0) + ((p && p.weaponEnhance) || 0) + ((p && p.depthWeaponBoost) || 0);
+}
+function depthArmorPower(p = player) {
+  return (p && p.armor && ITEMS[p.armor] ? ITEMS[p.armor].defense : 0) + ((p && p.armorEnhance) || 0) + ((p && p.depthArmorBoost) || 0);
+}
+function isDepthSupportWindow(floor = player && player.floor) {
+  return !!(player && player.mode === "endless" && floor >= 30 && floor <= 36);
+}
+function needsDepthWeaponSupport(floor = player && player.floor) {
+  if (!isDepthSupportWindow(floor) || !player) return false;
+  if ((player.depthWeaponBoost || 0) >= 3) return false;
+  const base = player.weapon && ITEMS[player.weapon] ? ITEMS[player.weapon].atk : 0;
+  if (base >= 18) return false;
+  return depthWeaponPower(player) < 18;
+}
+function needsDepthArmorSupport(floor = player && player.floor) {
+  if (!isDepthSupportWindow(floor) || !player) return false;
+  if ((player.depthArmorBoost || 0) >= 3) return false;
+  const base = player.armor && ITEMS[player.armor] ? ITEMS[player.armor].defense : 0;
+  if (base >= 18) return false;
+  return depthArmorPower(player) < 15;
+}
+function noteDepthSupport(reason) {
+  if (!runStats || !reason) return;
+  runStats.depthSupportReasons = runStats.depthSupportReasons || [];
+  if (runStats.depthSupportReasons.indexOf(reason) < 0) runStats.depthSupportReasons.push(reason);
+}
+function applyDepthWeaponSupport(source = "深層補助") {
+  if (!player) return "武器を整えられなかった。";
+  const before = player.depthWeaponBoost || 0;
+  const add = Math.min(3 - before, 3);
+  if (add <= 0) return "すでに武器は深層の火を帯びている。";
+  player.depthWeaponBoost = before + add;
+  if (runStats) {
+    runStats.depthWeaponSupportUsed = true;
+    noteDepthSupport(`${source}:武器+${add}`);
+  }
+  return "深層の鍛冶火が武器を補った。";
+}
+function applyDepthArmorSupport(source = "深層補助") {
+  if (!player) return "防具を整えられなかった。";
+  const before = player.depthArmorBoost || 0;
+  const add = Math.min(3 - before, 3);
+  if (add <= 0) return "すでに防具は深層の火を帯びている。";
+  player.depthArmorBoost = before + add;
+  if (runStats) {
+    runStats.depthArmorSupportUsed = true;
+    noteDepthSupport(`${source}:防具+${add}`);
+  }
+  return "深層の火が鎧を締め直した。";
+}
+function applyRogueDepthEscapeSupport() {
+  if (!isEndlessMode() || !player || player.cls !== "盗賊") return;
+  const g = heal(player, 3);
+  if (runStats) {
+    runStats.depthClassSupportUsed = true;
+    noteDepthSupport("盗賊:深層逃走HP+3");
+  }
+  if (g > 0) tell("盗賊は深層の息継ぎを掴んだ。HPが3回復した。", "shop");
 }
 function hasEffect(p, name) { return p.effects.some(e => e.name === name); }
 function addEffect(p, name, turns, power = 0) {
@@ -1577,7 +1676,10 @@ function equipLabel(slot) {
   const name = slot === "weapon" ? player.weapon : player.armor;
   if (!name) return "なし";
   const plus = slot === "weapon" ? (player.weaponEnhance || 0) : (player.armorEnhance || 0);
-  return `${name}${plus > 0 ? ` +${plus}` : ""}`;
+  const depthPlus = player.mode === "endless"
+    ? (slot === "weapon" ? (player.depthWeaponBoost || 0) : (player.depthArmorBoost || 0))
+    : 0;
+  return `${name}${plus > 0 ? ` +${plus}` : ""}${depthPlus > 0 ? ` 深+${depthPlus}` : ""}`;
 }
 function itemPlusLabel(name, plus = 0) {
   return name ? `${name}${plus > 0 ? ` +${plus}` : ""}` : "—";
@@ -2046,6 +2148,7 @@ async function combat(m, canFlee = true) {
         if (player.cls === "盗賊") { addClassFeatureStat("rogueEscapes"); tell("盗賊の足さばき！", "shop"); }
         tell(`${m.name} を撒いて逃げ切った！`, "shop");
         addRunStat("fleeSuccessCount");
+        applyRogueDepthEscapeSupport();
         // 記憶効果「遁走の記憶」: 逃走成功でHP+2
         if (hasMemory("swift_flee")) {
           const g = heal(player, 2);
@@ -2069,6 +2172,7 @@ async function combat(m, canFlee = true) {
         if (armorBonus > 0) { runStats.equipmentSynergyTriggers += 1; tell("革の鎧が音を抑え、滑るように離脱した。", "shop"); }
         tell(`${m.name} を撒いて逃げ切った！`, "shop");
         addRunStat("fleeSuccessCount");
+        applyRogueDepthEscapeSupport();
         // 盗賊：逃げ際に30%で隠し持ちから5〜15Gを抜き取る（小さな副収入）
         if (isRogue && Math.random() < 0.30) {
           const g = randInt(5, 15);
@@ -2633,13 +2737,19 @@ async function eventForge(discount = 1, title = "鍛冶屋") {
   saveGame();
 }
 function blessingOptions(isEndless = false, prepFloor = null) {
-  // plus9: prepFloor === 35 のときだけ、40F準備系の祝福重みを少し上げる。
-  // 物語/標準は40F挑戦のため、挑戦は依然として運要素を残すバランス。
+  // plus10: prepFloor === 30/35 のときだけ、深層準備系の祝福重みを少し上げる。
+  // 物語/標準は詰み防止、挑戦は依然として運要素を残すバランス。
+  const isPrep30 = (prepFloor === 30);
   const isPrep35 = (prepFloor === 35);
   const pool = BLESSINGS
     .filter(b => b.id !== "forge" || canEnhance("weapon", 1, true) || canEnhance("armor", 1, true))
     .map(b => {
       let w = isEndless && b.endlessWeight ? b.endlessWeight : b.weight;
+      if (isPrep30) {
+        if (b.id === "forge")      w *= 1.35;
+        if (b.id === "life")       w *= 1.25;
+        if (b.id === "apothecary") w *= 1.2;
+      }
       if (isPrep35) {
         if (b.id === "forge")      w *= 1.6;
         if (b.id === "life")       w *= 1.4;
@@ -2659,8 +2769,118 @@ function blessingOptions(isEndless = false, prepFloor = null) {
   }
   return picked;
 }
-function buildDepth35BossPrepPool(existingOptions = []) {
+function buildDepthNeedSupportPool(existingOptions = [], floor = player && player.floor) {
   const pool = [];
+  const existingIds = new Set((existingOptions || []).map(o => o && o.id).filter(Boolean));
+  const add = (opt) => { if (opt && !existingIds.has(opt.id)) pool.push(opt); };
+  if (!isDepthSupportWindow(floor) || !player) return pool;
+  if (needsDepthWeaponSupport(floor)) {
+    add({
+      id: "depth_support_weapon", name: "深層の鍛冶火", desc: "武器を深層水準へ整える",
+      apply: () => applyDepthWeaponSupport("不足補完"),
+    });
+  }
+  if (needsDepthArmorSupport(floor)) {
+    add({
+      id: "depth_support_armor", name: "締め直す鎧", desc: "防具を深層水準へ整える",
+      apply: () => applyDepthArmorSupport("不足補完"),
+    });
+  }
+  const hpTarget = floor >= 35 ? 108 : 98;
+  if ((player.max_hp || 0) < hpTarget) {
+    add({
+      id: "depth_support_life", name: "深層の鼓動", desc: "最大HP +10 / HP +10",
+      apply: () => {
+        player.max_hp += 10;
+        player.hp = Math.min(player.max_hp, player.hp + 10);
+        noteDepthSupport("不足補完:最大HP+10");
+        return "最大HPが10上昇した。";
+      },
+    });
+  }
+  if (player.max_hp > 0 && player.hp / player.max_hp < 0.60) {
+    add({
+      id: "depth_support_heal", name: "息継ぎの記憶", desc: "HPを中回復",
+      apply: () => {
+        const g = heal(player, Math.max(18, Math.floor(player.max_hp * 0.35)));
+        noteDepthSupport("不足補完:HP回復");
+        return `HPが ${g} 回復した。`;
+      },
+    });
+  }
+  if (countInventory("ポーション") === 0) {
+    add({
+      id: "depth_support_potion", name: "予備の薬包", desc: "ポーション +1",
+      apply: () => {
+        player.inventory.push("ポーション");
+        noteDepthSupport("不足補完:ポーション+1");
+        return "ポーションを得た。";
+      },
+    });
+  }
+  if (player.cls === "盗賊" && (canEnhance("weapon", 1, true) || canEnhance("armor", 1, true))) {
+    add({
+      id: "depth_support_rogue_forge", name: "盗賊の段取り", desc: "武器か防具を +1",
+      apply: () => {
+        const slots = ["weapon", "armor"].filter(s => canEnhance(s, 1, true));
+        const slot = slots.length === 2
+          ? (getEnhance("weapon") <= getEnhance("armor") ? "weapon" : "armor")
+          : slots[0];
+        if (!slot) return "鍛える装備がなかった。";
+        enhanceEquipment(slot, { free: true, source: "rogue_depth_support" });
+        if (runStats) runStats.depthClassSupportUsed = true;
+        noteDepthSupport("盗賊:鍛冶段取り");
+        return `${slot === "weapon" ? equipLabel("weapon") : equipLabel("armor")} が強化された。`;
+      },
+    });
+  }
+  if (player.cls === "魔導士" && countInventory("魔法の巻物") < 2) {
+    add({
+      id: "depth_support_mage_scroll", name: "魔導士の紙束", desc: "魔法の巻物 +1",
+      apply: () => {
+        player.inventory.push("魔法の巻物");
+        if (runStats) runStats.depthClassSupportUsed = true;
+        noteDepthSupport("魔導士:巻物+1");
+        return "魔法の巻物を得た。";
+      },
+    });
+  }
+  if (player.cls === "魔導士" && canAddMemory()) {
+    const owned = player.memoryEffects || [];
+    const offeredMemoryIds = (existingOptions || [])
+      .filter(o => o && o.isMemory && o.memoryDef)
+      .map(o => o.memoryDef.id);
+    const candidates = MEMORY_EFFECTS.filter(e =>
+      owned.indexOf(e.id) < 0 && offeredMemoryIds.indexOf(e.id) < 0
+    );
+    if (candidates.length > 0) {
+      const def = choice(candidates);
+      add({
+        id: "depth_support_mage_memory:" + def.id,
+        name: `記憶効果: ${def.name}`,
+        desc: def.desc,
+        apply: () => { addMemoryEffect(def.id, "魔導士深層補助"); return ""; },
+        isMemory: true,
+        memoryDef: def,
+        classSupport: true,
+      });
+    }
+  }
+  return pool;
+}
+function injectDepthSupportOption(options, floor = player && player.floor) {
+  if (!Array.isArray(options) || options.length === 0) return options;
+  const pool = buildDepthNeedSupportPool(options, floor);
+  if (pool.length === 0) return options;
+  const out = options.slice();
+  const candidate = choice(pool);
+  let replaceAt = out.findIndex(o => o && !o.isMemory && !String(o.id || "").startsWith("depth_support_"));
+  if (replaceAt < 0) replaceAt = out.length - 1;
+  out[replaceAt] = candidate;
+  return out;
+}
+function buildDepth35BossPrepPool(existingOptions = []) {
+  const pool = buildDepthNeedSupportPool(existingOptions, 35);
   if (canEnhance("armor", 1, true)) {
     pool.push({
       id: "prep35_armor", name: "守りの鍛冶記憶", desc: "防具 +1",
@@ -2717,7 +2937,8 @@ function buildDepth35BossPrepPool(existingOptions = []) {
 }
 function injectDepth35BossPrepOption(options) {
   if (!Array.isArray(options) || options.length === 0) return options;
-  const pool = buildDepth35BossPrepPool(options);
+  const supportPool = buildDepthNeedSupportPool(options, 35);
+  const pool = supportPool.length ? supportPool : buildDepth35BossPrepPool(options);
   if (pool.length === 0) return options;
   const out = options.slice();
   const candidate = choice(pool);
@@ -2771,14 +2992,16 @@ function applyBlessing(b) {
 }
 async function offerBlessingChoice(sourceLabel) {
   const isEndless = isEndlessMode();
-  // plus9: 深層35Fボス勝利時のみ、40F準備系の祝福重みを少し上げて引きやすくする
-  const prepFloor = (isEndless && player && player.floor === 35) ? 35 : null;
+  // plus10: 深層30F/35Fボス勝利時のみ、不足補完系を混ぜて35F以前の詰みを減らす
+  const prepFloor = (isEndless && player && (player.floor === 30 || player.floor === 35)) ? player.floor : null;
   let options = blessingOptions(isEndless, prepFloor);
   if (options.length === 0) return;
   // plus6: 記憶効果の上限に空きがあれば、低確率で1枠を記憶効果候補に置換
-  // 本編 20% / 深層 40%（深層は出やすめ）
+  // 本編 20% / 深層 40%（魔導士は30F以降だけ55%）
   if (canAddMemory()) {
-    const memoryRate = isEndless ? 0.40 : 0.20;
+    const memoryRate = isEndless
+      ? (player && player.cls === "魔導士" && player.floor >= 30 ? 0.55 : 0.40)
+      : 0.20;
     if (Math.random() < memoryRate) {
       const owned = player.memoryEffects || [];
       const candidates = MEMORY_EFFECTS.filter(e => owned.indexOf(e.id) < 0);
@@ -2795,6 +3018,7 @@ async function offerBlessingChoice(sourceLabel) {
       }
     }
   }
+  if (prepFloor === 30) options = injectDepthSupportOption(options, 30);
   if (prepFloor === 35) options = injectDepth35BossPrepOption(options);
   tellEvent("✦ 記憶の祝福", `${sourceLabel}の記憶が形を成す。1つ選べ。`, "shop");
   const idx = await ask(options.map(b => ({ label: b.name, desc: b.desc })));
@@ -2802,6 +3026,10 @@ async function offerBlessingChoice(sourceLabel) {
   let result = "";
   if (chosen.isMemory) {
     addMemoryEffect(chosen.memoryDef.id, sourceLabel);
+    if (chosen.classSupport && runStats) {
+      runStats.depthClassSupportUsed = true;
+      noteDepthSupport("魔導士:記憶候補");
+    }
   } else if (typeof chosen.apply === "function") {
     result = chosen.apply();
   } else {
@@ -2896,7 +3124,8 @@ async function maybeOfferEliteLoot(m) {
   // plus7: 報酬密度の調整（本編40→35%、深層60→50%、深層affix +15→+10pp）
   const baseRate = isEndless ? 0.50 : 0.35;
   const depthBonus = (m && m.elite === "depth") ? 0.10 : 0;
-  if (Math.random() >= (baseRate + depthBonus)) return;
+  const rogueDepthBonus = (isEndless && player && player.cls === "盗賊") ? 0.05 : 0;
+  if (Math.random() >= (baseRate + depthBonus + rogueDepthBonus)) return;
   const pool = buildEliteLootPool(m);
   const opts = [];
   while (opts.length < 3 && pool.length > 0) {
@@ -2913,6 +3142,10 @@ async function maybeOfferEliteLoot(m) {
     runStats.eliteLootChoices.push({ id: chosen.id, label: chosen.label, floor: player.floor });
     runStats.eliteLootCount = (runStats.eliteLootCount || 0) + 1;
     if (chosen.isMemory) runStats.eliteLootMemoryCount = (runStats.eliteLootMemoryCount || 0) + 1;
+    if (rogueDepthBonus > 0) {
+      runStats.depthClassSupportUsed = true;
+      noteDepthSupport("盗賊:戦利品率+5pp");
+    }
   }
   if (result) tell(result, "gold");
   renderStatus();
@@ -2987,16 +3220,22 @@ async function offerF40PrepChoice(sourceLabel) {
       });
     }
   }
-  const opts = [];
+  for (const opt of buildDepthNeedSupportPool(pool, 36)) pool.push(opt);
+  let opts = [];
   const work = [...pool];
   while (opts.length < 3 && work.length) {
     const i = rand(work.length);
     opts.push(work.splice(i, 1)[0]);
   }
+  opts = injectDepthSupportOption(opts, 36);
   tellEvent(sourceLabel, "40Fの気配が濃い。挑戦前の備えを1つ選べ。", "shop");
   const idx = await ask(opts.map(o => ({ label: o.name, desc: o.desc })));
   const chosen = opts[idx];
   const result = chosen.apply();
+  if (chosen.isMemory && chosen.classSupport && runStats) {
+    runStats.depthClassSupportUsed = true;
+    noteDepthSupport("魔導士:記憶候補");
+  }
   if (runStats) {
     runStats.blessingChoices = runStats.blessingChoices || [];
     runStats.blessingChoices.push({ id: chosen.id, name: chosen.name, floor: player.floor, source: sourceLabel });
@@ -3060,8 +3299,10 @@ async function eventBoss() {
     runStats.currentBossFloor = player.floor;
     runStats.bossHp = m.hp;
     runStats.bossAtk = m.atk;
-    runStats.currentBossBreakpointTuned = !!m.bossBreakpointTuned;
+    runStats.currentBossBreakpointTuned = !!(m.bossBreakpointTuned || m.f35BossTuned || m.f40BossTuned);
     if (m.bossBreakpointTuned) runStats.bossBreakpointTuned = true;
+    if (m.f35BossTuned) runStats.f35BossTuned = true;
+    if (m.f40BossTuned) runStats.f40BossTuned = true;
   }
   const headline = isEndless ? `☠ B${player.floor}F 深層ボス：${m.name}` : `☠ B${player.floor}F ボス：${m.name}`;
   tellEvent(headline, `${m.flavor}\n\n──── これより先、逃げる事は叶わない。`, "boss");
@@ -4069,6 +4310,14 @@ function buildRunSummary(kind, score, reason) {
     bossBreakpointTuned:   !!(runStats.bossBreakpointTuned),
     currentBossBreakpointTuned: !!(runStats.currentBossBreakpointTuned),
     preF40PreparationUsed: !!(runStats.preF40PreparationUsed),
+    // plus10: 深層自由度回復の確認用
+    depthWeaponSupportUsed: !!(runStats.depthWeaponSupportUsed),
+    depthArmorSupportUsed:  !!(runStats.depthArmorSupportUsed),
+    depthClassSupportUsed:  !!(runStats.depthClassSupportUsed),
+    depthStoryAssistApplied: !!(runStats.depthStoryAssistApplied),
+    depthSupportReasons: runStats.depthSupportReasons || [],
+    f35BossTuned: !!(runStats.f35BossTuned),
+    f40BossTuned: !!(runStats.f40BossTuned),
     reason,
     date: new Date().toISOString(),
   };
@@ -4206,6 +4455,10 @@ function buildEndCard(kind, reason) {
         <tr><td>使用GOLD</td><td>${runStats.forgeGoldSpent || 0}G</td></tr>
       </table>`
     : "";
+  const supportReasons = runStats.depthSupportReasons || [];
+  const depthSupportBlock = isEndless && supportReasons.length
+    ? `<h3>深層補助</h3><table>${supportReasons.map(r => `<tr><td>${escapeHtml(r)}</td></tr>`).join("")}</table>`
+    : "";
   // 「今回の冒険」をテーブルではなく、評価バッジ＋一言リプレイ＋ヒントとして見せる
   const evaluation = determineRunEvaluation(kind);
   const replay = buildReplayLine();
@@ -4245,6 +4498,7 @@ function buildEndCard(kind, reason) {
     ${skillsBlock}
     ${blessingBlock}
     ${forgeBlock}
+    ${depthSupportBlock}
     ${classEventBlock}
     ${mmBlock}
     ${titleBlock}
@@ -4504,6 +4758,7 @@ function initDebugBar() {
       boss: runStats && runStats.currentBossFloor
         ? `B${runStats.currentBossFloor}F HP${runStats.bossHp} ATK${runStats.bossAtk} tuned=${!!runStats.currentBossBreakpointTuned}`
         : "未遭遇",
+      support: runStats ? (runStats.depthSupportReasons || []).join(" / ") : "",
     };
     dump.memories = (player.memoryEffects || []).map(id => (memoryDef(id) ? memoryDef(id).name : id)).join(",") || "なし";
     dump.elite = runStats ? `遭遇${runStats.eliteEncounters||0} 撃破${runStats.eliteKills||0} 戦利品${runStats.eliteLootCount||0}` : "—";
@@ -4512,6 +4767,7 @@ function initDebugBar() {
     dlog(`武=${dump.weapon} 防=${dump.armor} 撃破${dump.kills} 深層B${dump.depthBoss} 祝福${dump.blessings}`);
     dlog(`記憶=${dump.memories} エリート=${dump.elite}`);
     dlog(`直近ボス=${dump.boss}`);
+    if (dump.support) dlog(`深層補助=${dump.support}`);
     dlog(`目標=${dump.mini}`);
   };
   document.getElementById("dbg-toggle").onclick = () => bar.classList.toggle("collapsed");
