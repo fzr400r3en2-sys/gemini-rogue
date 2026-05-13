@@ -482,7 +482,7 @@ input.text-input:focus { border-color: var(--accent); }
 // ====================================================================
 const FINAL_FLOOR = 20;
 const BOSS_FLOORS = new Set([5, 10, 15, 20]);
-const APP_VERSION = "v20260510-rogue-plus10";
+const APP_VERSION = "v20260510-rogue-plus11";
 // 開発確認用：URLに ?debug=1 が付いているときだけ有効化する。
 // 通常プレイでは false 固定で、UIも出ない。
 const DEBUG_MODE = (() => {
@@ -493,6 +493,15 @@ const DEBUG_MODE = (() => {
 const FORGE_COSTS = [0, 60, 100, 160, 240, 340];
 const STORY_FORGE_LIMIT = 3;
 const ENDLESS_FORGE_LIMIT = 5;
+const SCRAP_FORGE_RATE = 0.60;
+const SCRAP_FORGE_MIN_GOLD = 20;
+const AWAKEN_UNLOCK_FLOOR = 41;
+const AWAKEN_MAX_LEVEL = 1;
+const AWAKEN_WEAPON_BONUS = 4;
+const AWAKEN_ARMOR_BONUS = 3;
+const AWAKEN_SCRAP_COST = 2;
+const AWAKEN_GOLD_COST = 150;
+const AWAKEN_MIN_GOLD = 100;
 
 const ITEMS = {
   "ポーション":     { category: "consumable", effect: "heal",      power: 25, price:  30, desc: "HPを25回復" },
@@ -867,6 +876,13 @@ function recordRunResult(kind, score, reason) {
     maxArmorEnhance: runStats ? (runStats.maxArmorEnhance || 0) : 0,
     weaponEnhance: player.weaponEnhance || 0,
     armorEnhance: player.armorEnhance || 0,
+    weaponAwaken: player.weaponAwaken || 0,
+    armorAwaken: player.armorAwaken || 0,
+    gearDismantled: runStats ? (runStats.gearDismantled || 0) : 0,
+    weaponScrapsGained: runStats ? (runStats.weaponScrapsGained || 0) : 0,
+    armorScrapsGained: runStats ? (runStats.armorScrapsGained || 0) : 0,
+    weaponScrapsUsed: runStats ? (runStats.weaponScrapsUsed || 0) : 0,
+    armorScrapsUsed: runStats ? (runStats.armorScrapsUsed || 0) : 0,
     miniGoal: snapshotMiniGoal(),
     evaluation: determineRunEvaluation(kind),
     replay: buildReplayLine(),
@@ -1091,6 +1107,16 @@ function newRunStats(mode = "story") {
     depthSupportReasons: [],
     f35BossTuned: false,
     f40BossTuned: false,
+    // plus11: 装備分解・素材鍛冶・深層覚醒
+    weaponScrapsGained: 0,
+    armorScrapsGained: 0,
+    weaponScrapsUsed: 0,
+    armorScrapsUsed: 0,
+    gearDismantled: 0,
+    forgeWithScrapsCount: 0,
+    weaponAwakenUsed: 0,
+    armorAwakenUsed: 0,
+    f60BossTuned: false,
     // ビルド・鍛冶・祝福
     blessingChoices: [],
     blessingCount: 0,
@@ -1168,6 +1194,15 @@ function normalizeRunStats(rs) {
   if (!Array.isArray(out.depthSupportReasons)) out.depthSupportReasons = [];
   if (typeof out.f35BossTuned !== "boolean") out.f35BossTuned = false;
   if (typeof out.f40BossTuned !== "boolean") out.f40BossTuned = false;
+  // plus11
+  if (typeof out.f60BossTuned !== "boolean") out.f60BossTuned = false;
+  [
+    "weaponScrapsGained", "armorScrapsGained", "weaponScrapsUsed", "armorScrapsUsed",
+    "gearDismantled", "forgeWithScrapsCount", "weaponAwakenUsed", "armorAwakenUsed",
+  ].forEach(k => {
+    if (typeof out[k] !== "number" || !isFinite(out[k]) || out[k] < 0) out[k] = 0;
+    out[k] = Math.floor(out[k]);
+  });
   [
     "classFeatureTriggers",
     "warriorCounters", "warriorDefends", "warriorBossKills",
@@ -1213,6 +1248,14 @@ function normalizePlayer(p) {
   if (typeof p.depthArmorBoost  !== "number" || p.depthArmorBoost  < 0) p.depthArmorBoost  = 0;
   p.depthWeaponBoost = Math.min(3, Math.floor(p.depthWeaponBoost));
   p.depthArmorBoost  = Math.min(3, Math.floor(p.depthArmorBoost));
+  if (typeof p.weaponScraps !== "number" || !isFinite(p.weaponScraps) || p.weaponScraps < 0) p.weaponScraps = 0;
+  if (typeof p.armorScraps  !== "number" || !isFinite(p.armorScraps)  || p.armorScraps  < 0) p.armorScraps  = 0;
+  p.weaponScraps = Math.floor(p.weaponScraps);
+  p.armorScraps  = Math.floor(p.armorScraps);
+  if (typeof p.weaponAwaken !== "number" || !isFinite(p.weaponAwaken) || p.weaponAwaken < 0) p.weaponAwaken = 0;
+  if (typeof p.armorAwaken  !== "number" || !isFinite(p.armorAwaken)  || p.armorAwaken  < 0) p.armorAwaken  = 0;
+  p.weaponAwaken = Math.min(AWAKEN_MAX_LEVEL, Math.floor(p.weaponAwaken));
+  p.armorAwaken  = Math.min(AWAKEN_MAX_LEVEL, Math.floor(p.armorAwaken));
   const lim = p.mode === "endless" ? ENDLESS_FORGE_LIMIT : STORY_FORGE_LIMIT;
   p.weaponEnhance = Math.min(lim, Math.floor(p.weaponEnhance));
   p.armorEnhance = Math.min(lim, Math.floor(p.armorEnhance));
@@ -1339,7 +1382,8 @@ function makeEndlessBoss(floor) {
   applyEndlessBossBreakpointTuning(m, floor);
   return m;
 }
-// plus10: 35Fは軽く、40Fはplus9のまま局所調整。25/30/45F以降・本編20Fには影響しない。
+// plus11: 35F/40Fは既存調整を維持し、60F魔王だけ深層覚醒込みで挑める壁へ局所調整。
+// 25/30/45F・本編20Fには影響しない。
 // 35F例: 標準 HP 491→441, ATK 45→42 / 挑戦 HP 517→465, ATK 51→47
 // 40F例: 標準 HP 988→829, ATK 66→58 / 挑戦 HP 1040→873, ATK 74→65
 function applyEndlessBossBreakpointTuning(m, floor) {
@@ -1349,6 +1393,13 @@ function applyEndlessBossBreakpointTuning(m, floor) {
     m.atk = Math.max(1, Math.floor(m.atk * 0.94));
     m.f35BossTuned = true;
     if (runStats) runStats.f35BossTuned = true;
+    return;
+  }
+  if (floor === 60) {
+    m.hp  = Math.max(1, Math.floor(m.hp  * 0.78));
+    m.atk = Math.max(1, Math.floor(m.atk * 0.84));
+    m.f60BossTuned = true;
+    if (runStats) runStats.f60BossTuned = true;
     return;
   }
   if (floor !== 40) return;
@@ -1389,6 +1440,8 @@ function newPlayer(name, cls) {
     inventory: [...c.start],
     weapon: null, armor: null,
     weaponEnhance: 0, armorEnhance: 0,
+    weaponScraps: 0, armorScraps: 0,
+    weaponAwaken: 0, armorAwaken: 0,
     effects: [],
     classUpgrades: {},      // {鉄壁:N, 反撃術:N, ...} 取得済みLv
     memoryEffects: [],      // この冒険中に取得した記憶効果のIDリスト
@@ -1406,20 +1459,28 @@ function newPlayer(name, cls) {
 function pAtk(p) {
   let a = p.base_atk + (p.weapon && ITEMS[p.weapon] ? ITEMS[p.weapon].atk : 0) + (p.weaponEnhance || 0);
   if (p.mode === "endless") a += p.depthWeaponBoost || 0;
+  if (p.mode === "endless") a += (p.weaponAwaken || 0) * AWAKEN_WEAPON_BONUS;
   for (const e of p.effects) if (e.name === "buff_atk") a += e.power;
   return a;
 }
 function pDef(p) {
   let d = p.base_def + (p.armor && ITEMS[p.armor] ? ITEMS[p.armor].defense : 0) + (p.armorEnhance || 0);
   if (p.mode === "endless") d += p.depthArmorBoost || 0;
+  if (p.mode === "endless") d += (p.armorAwaken || 0) * AWAKEN_ARMOR_BONUS;
   for (const e of p.effects) if (e.name === "buff_def") d += e.power;
   return d;
 }
 function depthWeaponPower(p = player) {
-  return (p && p.weapon && ITEMS[p.weapon] ? ITEMS[p.weapon].atk : 0) + ((p && p.weaponEnhance) || 0) + ((p && p.depthWeaponBoost) || 0);
+  return (p && p.weapon && ITEMS[p.weapon] ? ITEMS[p.weapon].atk : 0)
+    + ((p && p.weaponEnhance) || 0)
+    + ((p && p.depthWeaponBoost) || 0)
+    + ((p && p.weaponAwaken) || 0) * AWAKEN_WEAPON_BONUS;
 }
 function depthArmorPower(p = player) {
-  return (p && p.armor && ITEMS[p.armor] ? ITEMS[p.armor].defense : 0) + ((p && p.armorEnhance) || 0) + ((p && p.depthArmorBoost) || 0);
+  return (p && p.armor && ITEMS[p.armor] ? ITEMS[p.armor].defense : 0)
+    + ((p && p.armorEnhance) || 0)
+    + ((p && p.depthArmorBoost) || 0)
+    + ((p && p.armorAwaken) || 0) * AWAKEN_ARMOR_BONUS;
 }
 function isDepthSupportWindow(floor = player && player.floor) {
   return !!(player && player.mode === "endless" && floor >= 30 && floor <= 36);
@@ -1679,10 +1740,13 @@ function equipLabel(slot) {
   const depthPlus = player.mode === "endless"
     ? (slot === "weapon" ? (player.depthWeaponBoost || 0) : (player.depthArmorBoost || 0))
     : 0;
-  return `${name}${plus > 0 ? ` +${plus}` : ""}${depthPlus > 0 ? ` 深+${depthPlus}` : ""}`;
+  const awaken = player.mode === "endless"
+    ? (slot === "weapon" ? (player.weaponAwaken || 0) : (player.armorAwaken || 0))
+    : 0;
+  return `${name}${plus > 0 ? ` +${plus}` : ""}${depthPlus > 0 ? ` 深+${depthPlus}` : ""}${awaken > 0 ? ` ★${awaken}` : ""}`;
 }
-function itemPlusLabel(name, plus = 0) {
-  return name ? `${name}${plus > 0 ? ` +${plus}` : ""}` : "—";
+function itemPlusLabel(name, plus = 0, awaken = 0) {
+  return name ? `${name}${plus > 0 ? ` +${plus}` : ""}${awaken > 0 ? ` ★${awaken}` : ""}` : "—";
 }
 function runStatValue(stat) {
   if (!runStats || typeof runStats[stat] !== "number") return 0;
@@ -1795,6 +1859,88 @@ function enhanceEquipment(slot, opts = {}) {
   renderStatus();
   return true;
 }
+function scrapsForSlot(slot) {
+  return slot === "weapon" ? (player.weaponScraps || 0) : (player.armorScraps || 0);
+}
+function setScrapsForSlot(slot, value) {
+  const v = Math.max(0, Math.floor(value || 0));
+  if (slot === "weapon") player.weaponScraps = v;
+  else player.armorScraps = v;
+}
+function scrapForgeCost(slot, discount = 1) {
+  return Math.max(SCRAP_FORGE_MIN_GOLD, Math.floor(forgeCost(slot, discount) * SCRAP_FORGE_RATE));
+}
+function canScrapEnhance(slot, discount = 1) {
+  if (!isEndlessMode()) return false;
+  if (!canEnhance(slot, discount, true)) return false;
+  return scrapsForSlot(slot) >= 1 && player.gold >= scrapForgeCost(slot, discount);
+}
+function enhanceEquipmentWithScrap(slot, opts = {}) {
+  const discount = typeof opts.discount === "number" ? opts.discount : 1;
+  if (!canScrapEnhance(slot, discount)) return false;
+  const cost = scrapForgeCost(slot, discount);
+  setScrapsForSlot(slot, scrapsForSlot(slot) - 1);
+  player.gold -= cost;
+  const next = getEnhance(slot) + 1;
+  setEnhance(slot, next);
+  if (runStats) {
+    if (slot === "weapon") {
+      runStats.maxWeaponEnhance = Math.max(runStats.maxWeaponEnhance || 0, next);
+      addRunStat("forgeWeaponCount", 1, false);
+      addRunStat("weaponScrapsUsed", 1, false);
+    } else {
+      runStats.maxArmorEnhance = Math.max(runStats.maxArmorEnhance || 0, next);
+      addRunStat("forgeArmorCount", 1, false);
+      addRunStat("armorScrapsUsed", 1, false);
+    }
+    addRunStat("forgeGoldSpent", cost, false);
+    addRunStat("forgeWithScrapsCount", 1, false);
+  }
+  renderStatus();
+  return true;
+}
+function depthAwakenLimit() {
+  if (!player || player.mode !== "endless" || player.floor < AWAKEN_UNLOCK_FLOOR) return 0;
+  return AWAKEN_MAX_LEVEL;
+}
+function getAwaken(slot) {
+  return slot === "weapon" ? (player.weaponAwaken || 0) : (player.armorAwaken || 0);
+}
+function setAwaken(slot, value) {
+  const v = Math.max(0, Math.min(AWAKEN_MAX_LEVEL, Math.floor(value || 0)));
+  if (slot === "weapon") player.weaponAwaken = v;
+  else player.armorAwaken = v;
+}
+function awakenCost(slot, discount = 1) {
+  let mult = discount;
+  if (player && player.cls === "盗賊") mult *= 0.9;
+  return Math.max(AWAKEN_MIN_GOLD, Math.floor(AWAKEN_GOLD_COST * mult));
+}
+function canAwaken(slot, discount = 1) {
+  if (!player || !hasForgeTarget(slot)) return false;
+  if (getAwaken(slot) >= depthAwakenLimit()) return false;
+  return scrapsForSlot(slot) >= AWAKEN_SCRAP_COST && player.gold >= awakenCost(slot, discount);
+}
+function awakenEquipment(slot, opts = {}) {
+  const discount = typeof opts.discount === "number" ? opts.discount : 1;
+  if (!canAwaken(slot, discount)) return false;
+  const cost = awakenCost(slot, discount);
+  setScrapsForSlot(slot, scrapsForSlot(slot) - AWAKEN_SCRAP_COST);
+  player.gold -= cost;
+  setAwaken(slot, getAwaken(slot) + 1);
+  if (runStats) {
+    if (slot === "weapon") {
+      addRunStat("weaponScrapsUsed", AWAKEN_SCRAP_COST, false);
+      addRunStat("weaponAwakenUsed", 1, false);
+    } else {
+      addRunStat("armorScrapsUsed", AWAKEN_SCRAP_COST, false);
+      addRunStat("armorAwakenUsed", 1, false);
+    }
+    addRunStat("forgeGoldSpent", cost, false);
+  }
+  renderStatus();
+  return true;
+}
 
 // ====================================================================
 // DOM・UI
@@ -1831,6 +1977,9 @@ function renderStatus() {
   const me = memArr.length
     ? `<div class="effects" style="color:var(--magenta); grid-column: span 4;">記憶: ${escapeHtml(memArr.join(" / "))}</div>`
     : "";
+  const scrapInfo = (player.mode === "endless" && ((player.weaponScraps || 0) > 0 || (player.armorScraps || 0) > 0))
+    ? `<span class="lbl">片</span><span class="val" style="grid-column: span 3;">武器${player.weaponScraps || 0} / 防具${player.armorScraps || 0}</span>`
+    : "";
 
   $statusGrid.innerHTML = `
     <span class="lbl">HP</span><span class="val" style="color:${hpColor}">${player.hp}/${player.max_hp}</span>
@@ -1839,6 +1988,7 @@ function renderStatus() {
     <span class="lbl">所持金</span><span class="val" style="color:var(--accent)">${player.gold}G</span>
     <span class="lbl">武器</span><span class="val">${escapeHtml(equipLabel("weapon"))}</span>
     <span class="lbl">防具</span><span class="val">${escapeHtml(equipLabel("armor"))}</span>
+    ${scrapInfo}
     <span class="lbl">所持品</span><span class="val" style="grid-column: span 3; font-size:11px;">${player.inventory.length ? compactInv(player.inventory) : "空"}</span>
     <div class="hp-bar"><div style="width:${hpRatio*100}%; background:${hpColor};"></div></div>
     ${me}
@@ -1957,6 +2107,49 @@ function showAchievementToast(def) {
 // アイテム使用
 // ====================================================================
 function removeOne(arr, x) { const i = arr.indexOf(x); if (i >= 0) arr.splice(i, 1); }
+function gearSlot(item) {
+  const info = ITEMS[item];
+  return info && (info.category === "weapon" || info.category === "armor") ? info.category : null;
+}
+function isGearItem(item) { return !!gearSlot(item); }
+function gearScrapAmount(item) {
+  const info = ITEMS[item];
+  if (!info) return 0;
+  return info.price >= 600 ? 2 : 1;
+}
+function dismantleGearItem(item, source = "分解") {
+  const slot = gearSlot(item);
+  if (!slot || !player || player.mode !== "endless" || player.inventory.indexOf(item) < 0) return "";
+  const amount = gearScrapAmount(item);
+  removeOne(player.inventory, item);
+  if (slot === "weapon") {
+    player.weaponScraps = (player.weaponScraps || 0) + amount;
+    if (runStats) addRunStat("weaponScrapsGained", amount, false);
+  } else {
+    player.armorScraps = (player.armorScraps || 0) + amount;
+    if (runStats) addRunStat("armorScrapsGained", amount, false);
+  }
+  if (runStats) addRunStat("gearDismantled", 1, false);
+  return `${item} を分解し、${slot === "weapon" ? "武器片" : "防具片"}を${amount}個得た。`;
+}
+async function offerGearPickupChoice(item, sourceLabel = "入手") {
+  if (!isGearItem(item) || !player || player.mode !== "endless" || player.inventory.indexOf(item) < 0) return;
+  tellEvent("装備の扱い", `${sourceLabel}: ${item} をどうする？`, "shop");
+  const idx = await ask([
+    { label: "装備する", desc: ITEMS[item].desc },
+    { label: "持つ" },
+    { label: "分解", desc: gearSlot(item) === "weapon" ? "武器片にする" : "防具片にする" },
+  ]);
+  if (idx === 0) {
+    const [ok, msg] = useItem(player, item, false);
+    tell(msg, ok ? "shop" : "dim");
+  } else if (idx === 2) {
+    const msg = dismantleGearItem(item, "入手時");
+    if (msg) tell(msg, "gold");
+  }
+  renderStatus();
+  saveGame();
+}
 
 function useItem(p, item, inCombat = false, target = null, canFlee = true) {
   const info = ITEMS[item];
@@ -1964,16 +2157,20 @@ function useItem(p, item, inCombat = false, target = null, canFlee = true) {
   if (info.category === "weapon") {
     const old = p.weapon;
     const lost = old && (p.weaponEnhance || 0) > 0;
+    const lostAwaken = old && p.mode === "endless" && (p.weaponAwaken || 0) > 0;
     p.weapon = item; p.weaponEnhance = 0; removeOne(p.inventory, item);
+    p.weaponAwaken = 0;
     if (old) p.inventory.push(old);
-    return [true, `${item} を装備した。${old ? `（${old} を外した）` : ""}${lost ? " 強化された武器を手放した。" : ""}`];
+    return [true, `${item} を装備した。${old ? `（${old} を外した）` : ""}${lost ? " 強化された武器を手放した。" : ""}${lostAwaken ? " 覚醒は失われた。" : ""}`];
   }
   if (info.category === "armor") {
     const old = p.armor;
     const lost = old && (p.armorEnhance || 0) > 0;
+    const lostAwaken = old && p.mode === "endless" && (p.armorAwaken || 0) > 0;
     p.armor = item; p.armorEnhance = 0; removeOne(p.inventory, item);
+    p.armorAwaken = 0;
     if (old) p.inventory.push(old);
-    return [true, `${item} を装備した。${old ? `（${old} を外した）` : ""}${lost ? " 強化された防具を手放した。" : ""}`];
+    return [true, `${item} を装備した。${old ? `（${old} を外した）` : ""}${lost ? " 強化された防具を手放した。" : ""}${lostAwaken ? " 覚醒は失われた。" : ""}`];
   }
   switch (info.effect) {
     case "heal": {
@@ -2060,6 +2257,21 @@ async function openInventory(inCombat = false, target = null, canFlee = true) {
   const idx = await ask(opts);
   if (idx === opts.length - 1) return null;
   const item = items[idx];
+  if (!inCombat && player.mode === "endless" && isGearItem(item)) {
+    const action = await ask([
+      { label: "装備する", desc: ITEMS[item].desc },
+      { label: "分解", desc: gearSlot(item) === "weapon" ? "武器片にする" : "防具片にする" },
+      { label: "やめる" },
+    ]);
+    if (action === 2) return null;
+    if (action === 1) {
+      const msg = dismantleGearItem(item, "所持品");
+      tell(msg || "分解できなかった。", msg ? "gold" : "dim");
+      renderStatus();
+      saveGame();
+      return item;
+    }
+  }
   const [consumed, msg] = useItem(player, item, inCombat, target, canFlee);
   tell(msg, consumed ? "shop" : "dim");
   renderStatus();
@@ -2272,11 +2484,17 @@ async function combat(m, canFlee = true) {
   const lines = [`${m.name} を倒した！`, `経験値 ${m.exp} と ${m.gold}G を得た。`];
   addGold(player, m.gold);
   for (const msg of gainExp(player, m.exp)) lines.push(msg);
+  const gearDrops = [];
   for (const [item, prob] of m.drops) {
-    if (Math.random() < prob) { player.inventory.push(item); lines.push(`${m.name} は ${item} を落とした！`); }
+    if (Math.random() < prob) {
+      player.inventory.push(item);
+      lines.push(`${m.name} は ${item} を落とした！`);
+      if (isGearItem(item)) gearDrops.push(item);
+    }
   }
   tellEvent("勝利！", lines.join("\n"), "victory");
   renderStatus();
+  for (const it of gearDrops) await offerGearPickupChoice(it, "戦利品");
   saveGame();
   return true;
 }
@@ -2365,6 +2583,7 @@ async function eventTreasure() {
   const gold = randInt(5, 15) * player.floor;
   addGold(player, gold);
   tell(`${gold}G と ${gained.join(", ")} を手に入れた！`, "gold");
+  for (const it of gained.filter(isGearItem)) await offerGearPickupChoice(it, "宝箱");
 }
 
 async function eventTrap() {
@@ -2510,6 +2729,7 @@ async function eventMerchant() {
       runStats.merchantIntroAvailable = false;
       tell("(紹介状の効果はここまでだ。)", "dim");
     }
+    if (isGearItem(item)) await offerGearPickupChoice(item, "購入品");
     renderStatus();
     saveGame();
     if (stock.length === 0) { tell("「これで打ち止めだ。気をつけてな。」"); return; }
@@ -2715,6 +2935,35 @@ function forgeOption(slot, discount = 1) {
     disabled: player.gold < cost,
   };
 }
+function scrapForgeOption(slot, discount = 1) {
+  const label = slot === "weapon" ? "武器片で強化" : "防具片で強化";
+  if (!hasForgeTarget(slot)) return { label, desc: "装備なし", disabled: true };
+  const cur = getEnhance(slot);
+  const limit = forgeLimit();
+  if (cur >= limit) return { label: `${label}（+${cur}）`, desc: `上限 +${limit}`, disabled: true };
+  const cost = scrapForgeCost(slot, discount);
+  const scraps = scrapsForSlot(slot);
+  return {
+    label: `${label}  +${cur}→+${cur + 1}`,
+    desc: `${slot === "weapon" ? "武器片" : "防具片"}1 + ${cost}G（所持${scraps}）`,
+    disabled: !canScrapEnhance(slot, discount),
+  };
+}
+function awakenOption(slot, discount = 1) {
+  const label = slot === "weapon" ? "武器覚醒" : "防具覚醒";
+  if (!hasForgeTarget(slot)) return { label, desc: "装備なし", disabled: true };
+  const limit = depthAwakenLimit();
+  const cur = getAwaken(slot);
+  if (limit <= 0) return { label, desc: "B41F以降", disabled: true };
+  if (cur >= limit) return { label: `${label} ★${cur}`, desc: `上限 ★${limit}`, disabled: true };
+  const cost = awakenCost(slot, discount);
+  const scraps = scrapsForSlot(slot);
+  return {
+    label: `${label}  ★${cur}→★${cur + 1}`,
+    desc: `${slot === "weapon" ? "武器片" : "防具片"}${AWAKEN_SCRAP_COST} + ${cost}G（所持${scraps}）`,
+    disabled: !canAwaken(slot, discount),
+  };
+}
 async function eventForge(discount = 1, title = "鍛冶屋") {
   const body = discount < 1
     ? "煤けた炉がまだ熱を帯びている。通常より少し安く鍛えられそうだ。"
@@ -2722,15 +2971,36 @@ async function eventForge(discount = 1, title = "鍛冶屋") {
   tellEvent(title, body, "shop");
   // 盗賊：鍛冶屋では値引きが効くことを短くログで伝える
   if (player.cls === "盗賊") tell("盗賊の交渉術！ 値引き価格で鍛えてもらえる。", "shop");
-  const idx = await ask([
-    forgeOption("weapon", discount),
-    forgeOption("armor", discount),
-    { label: "立ち去る" },
-  ]);
-  if (idx === 2) return;
-  const slot = idx === 0 ? "weapon" : "armor";
+  const entries = [
+    { kind: "normal", slot: "weapon", option: forgeOption("weapon", discount) },
+    { kind: "normal", slot: "armor", option: forgeOption("armor", discount) },
+  ];
+  if (isEndlessMode()) {
+    entries.push(
+      { kind: "scrap", slot: "weapon", option: scrapForgeOption("weapon", discount) },
+      { kind: "scrap", slot: "armor", option: scrapForgeOption("armor", discount) },
+      { kind: "awaken", slot: "weapon", option: awakenOption("weapon", discount) },
+      { kind: "awaken", slot: "armor", option: awakenOption("armor", discount) },
+    );
+  }
+  entries.push({ kind: "leave", option: { label: "立ち去る" } });
+  const idx = await ask(entries.map(e => e.option));
+  const entry = entries[idx];
+  if (!entry || entry.kind === "leave") return;
+  const slot = entry.slot;
+  if (entry.kind === "awaken") {
+    const before = getAwaken(slot);
+    const ok = awakenEquipment(slot, { discount, source: "forge" });
+    if (!ok) { tell("今は覚醒できない。", "dim"); return; }
+    const label = slot === "weapon" ? equipLabel("weapon") : equipLabel("armor");
+    tell(`深層の火が目覚めた。${label} は ★${before + 1} になった。`, "gold");
+    saveGame();
+    return;
+  }
   const before = getEnhance(slot);
-  const ok = enhanceEquipment(slot, { discount, source: "forge" });
+  const ok = entry.kind === "scrap"
+    ? enhanceEquipmentWithScrap(slot, { discount, source: "forge_scrap" })
+    : enhanceEquipment(slot, { discount, source: "forge" });
   if (!ok) { tell("今は強化できない。", "dim"); return; }
   const label = slot === "weapon" ? equipLabel("weapon") : equipLabel("armor");
   tell(`鍛冶の火花が散った。${label} は +${before + 1} になった。`, "gold");
@@ -3299,10 +3569,11 @@ async function eventBoss() {
     runStats.currentBossFloor = player.floor;
     runStats.bossHp = m.hp;
     runStats.bossAtk = m.atk;
-    runStats.currentBossBreakpointTuned = !!(m.bossBreakpointTuned || m.f35BossTuned || m.f40BossTuned);
+    runStats.currentBossBreakpointTuned = !!(m.bossBreakpointTuned || m.f35BossTuned || m.f40BossTuned || m.f60BossTuned);
     if (m.bossBreakpointTuned) runStats.bossBreakpointTuned = true;
     if (m.f35BossTuned) runStats.f35BossTuned = true;
     if (m.f40BossTuned) runStats.f40BossTuned = true;
+    if (m.f60BossTuned) runStats.f60BossTuned = true;
   }
   const headline = isEndless ? `☠ B${player.floor}F 深層ボス：${m.name}` : `☠ B${player.floor}F ボス：${m.name}`;
   tellEvent(headline, `${m.flavor}\n\n──── これより先、逃げる事は叶わない。`, "boss");
@@ -3430,10 +3701,13 @@ function applyMemoryMerchantPurchase(it) {
     if (info.atk > curAtk) {
       const old = player.weapon;
       const lost = old && (player.weaponEnhance || 0) > 0;
+      const lostAwaken = old && player.mode === "endless" && (player.weaponAwaken || 0) > 0;
       player.weapon = it.item;
       player.weaponEnhance = 0;
+      player.weaponAwaken = 0;
       if (old) player.inventory.push(old);
       if (lost) tell("強化された武器を手放した。", "dim");
+      if (lostAwaken) tell("武器の覚醒は失われた。", "dim");
     } else {
       player.inventory.push(it.item);
     }
@@ -3442,10 +3716,13 @@ function applyMemoryMerchantPurchase(it) {
     if (info.defense > curDef) {
       const old = player.armor;
       const lost = old && (player.armorEnhance || 0) > 0;
+      const lostAwaken = old && player.mode === "endless" && (player.armorAwaken || 0) > 0;
       player.armor = it.item;
       player.armorEnhance = 0;
+      player.armorAwaken = 0;
       if (old) player.inventory.push(old);
       if (lost) tell("強化された防具を手放した。", "dim");
+      if (lostAwaken) tell("防具の覚醒は失われた。", "dim");
     } else {
       player.inventory.push(it.item);
     }
@@ -4013,7 +4290,7 @@ async function showRecords() {
         <tr><td>勇者</td><td>${escapeHtml(lr.name)} (${lr.cls})</td></tr>
         <tr><td>到達階 / Lv</td><td>B${lr.floor}F / Lv${lr.level}</td></tr>
         <tr><td>撃破 / 最大ダメ</td><td>${lr.kills}体 / ${lr.maxDamage}</td></tr>
-        <tr><td>装備</td><td>${escapeHtml(itemPlusLabel(lr.weapon, lr.weaponEnhance || 0))} / ${escapeHtml(itemPlusLabel(lr.armor, lr.armorEnhance || 0))}</td></tr>
+        <tr><td>装備</td><td>${escapeHtml(itemPlusLabel(lr.weapon, lr.weaponEnhance || 0, lr.weaponAwaken || 0))} / ${escapeHtml(itemPlusLabel(lr.armor, lr.armorEnhance || 0, lr.armorAwaken || 0))}</td></tr>
         ${titleRow}
         ${growthRow}
         ${ceRow}
@@ -4041,7 +4318,7 @@ async function showRecords() {
         <tr><td>探索者</td><td>${escapeHtml(er.name)} (${er.cls})</td></tr>
         <tr><td>撃破 / 深層ボス</td><td>${er.kills}体 / ${er.depthBossKills || 0}体</td></tr>
         <tr><td>最大ダメージ</td><td>${er.maxDamage}</td></tr>
-        <tr><td>装備</td><td>${escapeHtml(itemPlusLabel(er.weapon, er.weaponEnhance || 0))} / ${escapeHtml(itemPlusLabel(er.armor, er.armorEnhance || 0))}</td></tr>
+        <tr><td>装備</td><td>${escapeHtml(itemPlusLabel(er.weapon, er.weaponEnhance || 0, er.weaponAwaken || 0))} / ${escapeHtml(itemPlusLabel(er.armor, er.armorEnhance || 0, er.armorAwaken || 0))}</td></tr>
         ${titleRow}
         ${growthRow}
         ${blessRow}
@@ -4162,6 +4439,9 @@ function buildReplayLine() {
   const owned = (player.memoryEffects || []);
   // plus7: クラス固有の高シグナル（鍛冶連発/反撃多用/逃走多用等）を先に判定し、
   // 記憶効果は「他に強い成果がない時」のフォールバックに格下げした。
+  if (isEndless && ((player.weaponAwaken || 0) > 0 || (player.armorAwaken || 0) > 0)) {
+    return `${player.cls}は深層で武具を覚醒させ、さらなる影へ挑んだ。`;
+  }
   if ((runStats.eliteKills || 0) >= 3) {
     return `数々の強敵を退け、その足跡は深く刻まれた。`;
   }
@@ -4318,6 +4598,20 @@ function buildRunSummary(kind, score, reason) {
     depthSupportReasons: runStats.depthSupportReasons || [],
     f35BossTuned: !!(runStats.f35BossTuned),
     f40BossTuned: !!(runStats.f40BossTuned),
+    // plus11: 装備分解・深層覚醒・60F調整
+    weaponScraps: player.weaponScraps || 0,
+    armorScraps: player.armorScraps || 0,
+    weaponScrapsGained: runStats.weaponScrapsGained || 0,
+    armorScrapsGained: runStats.armorScrapsGained || 0,
+    weaponScrapsUsed: runStats.weaponScrapsUsed || 0,
+    armorScrapsUsed: runStats.armorScrapsUsed || 0,
+    gearDismantled: runStats.gearDismantled || 0,
+    forgeWithScrapsCount: runStats.forgeWithScrapsCount || 0,
+    weaponAwaken: player.weaponAwaken || 0,
+    armorAwaken: player.armorAwaken || 0,
+    weaponAwakenUsed: runStats.weaponAwakenUsed || 0,
+    armorAwakenUsed: runStats.armorAwakenUsed || 0,
+    f60BossTuned: !!(runStats.f60BossTuned),
     reason,
     date: new Date().toISOString(),
   };
@@ -4455,6 +4749,18 @@ function buildEndCard(kind, reason) {
         <tr><td>使用GOLD</td><td>${runStats.forgeGoldSpent || 0}G</td></tr>
       </table>`
     : "";
+  const scrapAny = (runStats.gearDismantled || 0) > 0
+    || (runStats.weaponScrapsUsed || 0) > 0
+    || (runStats.armorScrapsUsed || 0) > 0
+    || (player.weaponAwaken || 0) > 0
+    || (player.armorAwaken || 0) > 0;
+  const scrapBlock = isEndless && scrapAny
+    ? `<h3>武具素材</h3><table>
+        ${(runStats.gearDismantled || 0) > 0 ? `<tr><td>分解</td><td>${runStats.gearDismantled || 0} 個（武器片+${runStats.weaponScrapsGained || 0} / 防具片+${runStats.armorScrapsGained || 0}）</td></tr>` : ""}
+        ${((runStats.weaponScrapsUsed || 0) + (runStats.armorScrapsUsed || 0)) > 0 ? `<tr><td>素材使用</td><td>武器 ${runStats.weaponScrapsUsed || 0} / 防具 ${runStats.armorScrapsUsed || 0}</td></tr>` : ""}
+        ${(player.weaponAwaken || player.armorAwaken) ? `<tr><td>覚醒</td><td>武器 ★${player.weaponAwaken || 0} / 防具 ★${player.armorAwaken || 0}</td></tr>` : ""}
+      </table>`
+    : "";
   const supportReasons = runStats.depthSupportReasons || [];
   const depthSupportBlock = isEndless && supportReasons.length
     ? `<h3>深層補助</h3><table>${supportReasons.map(r => `<tr><td>${escapeHtml(r)}</td></tr>`).join("")}</table>`
@@ -4498,6 +4804,7 @@ function buildEndCard(kind, reason) {
     ${skillsBlock}
     ${blessingBlock}
     ${forgeBlock}
+    ${scrapBlock}
     ${depthSupportBlock}
     ${classEventBlock}
     ${mmBlock}
@@ -4650,6 +4957,7 @@ function initDebugBar() {
       <button data-floor="36">36</button>
       <button data-floor="40">40</button>
       <button data-floor="45">45</button>
+      <button data-floor="60">60</button>
     </div>
     <button id="dbg-gold">+100G</button>
     <button id="dbg-hp">Full HP</button>
@@ -4657,6 +4965,12 @@ function initDebugBar() {
       <button id="dbg-pot">+ポーション</button>
       <button id="dbg-smk">+煙玉</button>
       <button id="dbg-scr">+巻物</button>
+    </div>
+    <div class="dbg-row">
+      <button id="dbg-wscrap">+武器片</button>
+      <button id="dbg-ascrap">+防具片</button>
+      <button id="dbg-wawake">武器覚醒</button>
+      <button id="dbg-aawake">防具覚醒</button>
     </div>
     <button id="dbg-forge" class="dbg-warn">⇒次階で鍛冶屋</button>
     <button id="dbg-bless" class="dbg-warn">⇒次階で祝福3択</button>
@@ -4707,6 +5021,30 @@ function initDebugBar() {
     renderStatus();
     dlog("+魔法の巻物");
   };
+  document.getElementById("dbg-wscrap").onclick = () => {
+    if (!player) return;
+    player.weaponScraps = (player.weaponScraps || 0) + 1;
+    if (runStats) addRunStat("weaponScrapsGained", 1, false);
+    renderStatus();
+    dlog("+武器片");
+  };
+  document.getElementById("dbg-ascrap").onclick = () => {
+    if (!player) return;
+    player.armorScraps = (player.armorScraps || 0) + 1;
+    if (runStats) addRunStat("armorScrapsGained", 1, false);
+    renderStatus();
+    dlog("+防具片");
+  };
+  document.getElementById("dbg-wawake").onclick = () => {
+    if (!player) return;
+    if (!awakenEquipment("weapon")) { dlog("武器覚醒できない"); return; }
+    dlog(`武器覚醒 ${equipLabel("weapon")}`);
+  };
+  document.getElementById("dbg-aawake").onclick = () => {
+    if (!player) return;
+    if (!awakenEquipment("armor")) { dlog("防具覚醒できない"); return; }
+    dlog(`防具覚醒 ${equipLabel("armor")}`);
+  };
   document.getElementById("dbg-forge").onclick = () => {
     window.__debugQueueEvent = "forge";
     dlog("次イベントを鍛冶屋に置換予約");
@@ -4751,6 +5089,8 @@ function initDebugBar() {
       hp: `${player.hp}/${player.max_hp}`,
       gold: player.gold, atk: pAtk(player), def: pDef(player),
       weapon: equipLabel("weapon"), armor: equipLabel("armor"),
+      scraps: `武器${player.weaponScraps || 0}/防具${player.armorScraps || 0}`,
+      awaken: `武器★${player.weaponAwaken || 0}/防具★${player.armorAwaken || 0}`,
       kills: runStats ? runStats.kills : 0,
       depthBoss: runStats ? runStats.depthBossKills : 0,
       blessings: runStats ? (runStats.blessingChoices || []).length : 0,
@@ -4765,6 +5105,7 @@ function initDebugBar() {
     console.log("[debug status]", dump);
     dlog(`mode=${dump.mode} F${dump.floor} HP${dump.hp} G${dump.gold} 攻防${dump.atk}/${dump.def}`);
     dlog(`武=${dump.weapon} 防=${dump.armor} 撃破${dump.kills} 深層B${dump.depthBoss} 祝福${dump.blessings}`);
+    dlog(`素材=${dump.scraps} 覚醒=${dump.awaken}`);
     dlog(`記憶=${dump.memories} エリート=${dump.elite}`);
     dlog(`直近ボス=${dump.boss}`);
     if (dump.support) dlog(`深層補助=${dump.support}`);
