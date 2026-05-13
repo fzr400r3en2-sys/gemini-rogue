@@ -482,7 +482,7 @@ input.text-input:focus { border-color: var(--accent); }
 // ====================================================================
 const FINAL_FLOOR = 20;
 const BOSS_FLOORS = new Set([5, 10, 15, 20]);
-const APP_VERSION = "v20260510-rogue-plus12";
+const APP_VERSION = "v20260510-rogue-plus13";
 // 開発確認用：URLに ?debug=1 が付いているときだけ有効化する。
 // 通常プレイでは false 固定で、UIも出ない。
 const DEBUG_MODE = (() => {
@@ -581,6 +581,8 @@ const DEPTH_PREPS = [
   { id: "attack", name: "攻めの支度", cost: 3, desc: "武器片+2" },
   { id: "guard", name: "守りの支度", cost: 3, desc: "防具片+2" },
 ];
+const DEPTH_START_WEAPONS = ["鋼の剣", "炎の剣", "木の棒"];
+const DEPTH_START_ARMORS = ["鋼の鎧", "聖なる鎧", "革の鎧"];
 const DEPTH_PASSIVES = [
   { id: "deepForge", name: "深層鍛冶術", maxLv: 3, costs: [3, 5, 8], desc: "深層分解時、低確率で片+1" },
   { id: "deepSupply", name: "補給の心得", maxLv: 3, costs: [3, 5, 8], desc: "深層の補給/回復候補が少し出やすい" },
@@ -905,6 +907,13 @@ function recordRunResult(kind, score, reason) {
     oldGearDismantled: runStats ? (runStats.oldGearDismantled || 0) : 0,
     oldWeaponDismantled: runStats ? (runStats.oldWeaponDismantled || 0) : 0,
     oldArmorDismantled: runStats ? (runStats.oldArmorDismantled || 0) : 0,
+    depthStartWeapon: runStats ? (runStats.depthStartWeapon || "") : "",
+    depthStartArmor: runStats ? (runStats.depthStartArmor || "") : "",
+    depthPrepEventUsed: runStats ? !!runStats.depthPrepEventUsed : false,
+    depthPrepEventShardsSpent: runStats ? (runStats.depthPrepEventShardsSpent || 0) : 0,
+    finalDepthCampUsed: runStats ? !!runStats.finalDepthCampUsed : false,
+    finalDepthCampChoice: runStats ? (runStats.finalDepthCampChoice || "") : "",
+    forgeVisitActions: runStats ? (runStats.forgeVisitActions || 0) : 0,
     miniGoal: snapshotMiniGoal(),
     evaluation: determineRunEvaluation(kind),
     replay: buildReplayLine(),
@@ -1172,6 +1181,14 @@ function newRunStats(mode = "story") {
     oldGearDismantled: 0,
     oldWeaponDismantled: 0,
     oldArmorDismantled: 0,
+    // plus13: 深層開始装備・40F前準備導線
+    depthStartWeapon: "",
+    depthStartArmor: "",
+    depthPrepEventUsed: false,
+    depthPrepEventShardsSpent: 0,
+    finalDepthCampUsed: false,
+    finalDepthCampChoice: "",
+    forgeVisitActions: 0,
     // ビルド・鍛冶・祝福
     blessingChoices: [],
     blessingCount: 0,
@@ -1260,10 +1277,16 @@ function normalizeRunStats(rs) {
     "gearDismantled", "forgeWithScrapsCount", "weaponAwakenUsed", "armorAwakenUsed",
     "depthPrepShardsSpent", "depthPassiveTriggers", "depthExtraScrapsGained",
     "oldGearDismantled", "oldWeaponDismantled", "oldArmorDismantled",
+    "depthPrepEventShardsSpent", "forgeVisitActions",
   ].forEach(k => {
     if (typeof out[k] !== "number" || !isFinite(out[k]) || out[k] < 0) out[k] = 0;
     out[k] = Math.floor(out[k]);
   });
+  if (typeof out.depthStartWeapon !== "string") out.depthStartWeapon = "";
+  if (typeof out.depthStartArmor !== "string") out.depthStartArmor = "";
+  if (typeof out.depthPrepEventUsed !== "boolean") out.depthPrepEventUsed = false;
+  if (typeof out.finalDepthCampUsed !== "boolean") out.finalDepthCampUsed = false;
+  if (typeof out.finalDepthCampChoice !== "string") out.finalDepthCampChoice = "";
   [
     "classFeatureTriggers",
     "warriorCounters", "warriorDefends", "warriorBossKills",
@@ -1444,10 +1467,11 @@ function makeEndlessBoss(floor) {
   applyEndlessBossBreakpointTuning(m, floor);
   return m;
 }
-// plus12: 35Fは鋼セットでも勝負になる中間試験へ再調整。40F/60Fは既存補正を維持。
+// plus13: 40Fは難易度別に再調整し、物語/標準では準備込みで挑める壁にする。
+// plus12: 35Fは鋼セットでも勝負になる中間試験へ再調整。60Fは既存補正を維持。
 // 25/30/45F・本編20Fには影響しない。
 // 35F例: 標準 HP 491→402, ATK 45→39 / 挑戦 HP 517→423, ATK 51→44
-// 40F例: 標準 HP 988→829, ATK 66→58 / 挑戦 HP 1040→873, ATK 74→65
+// 40F例: 物語 HP 884→636, ATK 59→44 / 標準 HP 988→741, ATK 66→52 / 挑戦 HP 1040→873, ATK 74→65
 function applyEndlessBossBreakpointTuning(m, floor) {
   if (!m) return;
   if (floor === 35) {
@@ -1465,8 +1489,14 @@ function applyEndlessBossBreakpointTuning(m, floor) {
     return;
   }
   if (floor !== 40) return;
-  m.hp  = Math.max(1, Math.floor(m.hp  * 0.84));
-  m.atk = Math.max(1, Math.floor(m.atk * 0.88));
+  const d = currentDifficulty();
+  const tuned = {
+    story:     { hp: 0.72, atk: 0.76 },
+    normal:    { hp: 0.75, atk: 0.80 },
+    challenge: { hp: 0.84, atk: 0.88 },
+  }[d] || { hp: 0.84, atk: 0.88 };
+  m.hp  = Math.max(1, Math.floor(m.hp  * tuned.hp));
+  m.atk = Math.max(1, Math.floor(m.atk * tuned.atk));
   m.bossBreakpointTuned = true;
   m.f40BossTuned = true;
   if (runStats) {
@@ -1822,6 +1852,62 @@ function applyDepthPrep(def) {
     return "防具片を2個得た。";
   }
   return "";
+}
+function spendMetaShards(amount) {
+  const n = Math.max(0, Math.floor(amount || 0));
+  const meta = loadMeta();
+  if (n <= 0) return true;
+  if ((meta.shards || 0) < n) return false;
+  meta.shards -= n;
+  saveMeta(meta);
+  return true;
+}
+function depthStartGearOption(item, slot) {
+  const info = ITEMS[item];
+  const stat = slot === "weapon" ? `攻+${info.atk}` : `防+${info.defense}`;
+  return { item, label: item, desc: `${stat} / ${info.desc}` };
+}
+function setDepthStartGear(slot, item) {
+  if (!player || !ITEMS[item]) return;
+  const key = slot === "weapon" ? "weapon" : "armor";
+  const enhanceKey = slot === "weapon" ? "weaponEnhance" : "armorEnhance";
+  const awakenKey = slot === "weapon" ? "weaponAwaken" : "armorAwaken";
+  const old = player[key];
+  const purchasedOld = old && runStats && (runStats.memoryMerchantPurchases || []).some(p => p.item === old);
+  if (old && old !== item && purchasedOld) player.inventory.push(old);
+  removeOne(player.inventory, item);
+  player[key] = item;
+  player[enhanceKey] = 0;
+  player[awakenKey] = 0;
+}
+async function offerDepthStartGearChoice() {
+  if (!player || player.mode !== "endless" || !runStats) return;
+  tellEvent("🌑 深層開始装備", "深層へ入る前に、今回の武器と防具を整える。欠片は使わない。", "shop");
+  const weaponOptions = DEPTH_START_WEAPONS
+    .filter(it => ITEMS[it] && ITEMS[it].category === "weapon")
+    .map(it => depthStartGearOption(it, "weapon"));
+  if (player.weapon && !weaponOptions.some(o => o.item === player.weapon)) {
+    weaponOptions.unshift({ item: player.weapon, label: `今の武器: ${player.weapon}`, desc: ITEMS[player.weapon].desc });
+  }
+  const wIdx = await ask(weaponOptions.map(o => ({ label: o.label, desc: o.desc })));
+  const weapon = weaponOptions[wIdx] && weaponOptions[wIdx].item;
+  if (weapon) setDepthStartGear("weapon", weapon);
+
+  const armorOptions = DEPTH_START_ARMORS
+    .filter(it => ITEMS[it] && ITEMS[it].category === "armor")
+    .map(it => depthStartGearOption(it, "armor"));
+  if (player.armor && !armorOptions.some(o => o.item === player.armor)) {
+    armorOptions.unshift({ item: player.armor, label: `今の防具: ${player.armor}`, desc: ITEMS[player.armor].desc });
+  }
+  const aIdx = await ask(armorOptions.map(o => ({ label: o.label, desc: o.desc })));
+  const armor = armorOptions[aIdx] && armorOptions[aIdx].item;
+  if (armor) setDepthStartGear("armor", armor);
+
+  runStats.depthStartWeapon = player.weapon || "";
+  runStats.depthStartArmor = player.armor || "";
+  tell(`開始装備を整えた: ${equipLabel("weapon")} / ${equipLabel("armor")}`, "gold");
+  renderStatus();
+  saveGame();
 }
 async function offerDepthPrepChoice() {
   if (!player || player.mode !== "endless" || player.depthPrep) return;
@@ -3162,47 +3248,59 @@ function awakenOption(slot, discount = 1) {
     disabled: !canAwaken(slot, discount),
   };
 }
-async function eventForge(discount = 1, title = "鍛冶屋") {
+async function eventForge(discount = 1, title = "鍛冶屋", opts = {}) {
+  const maxActions = Math.max(1, Math.floor(
+    typeof opts.maxActions === "number"
+      ? opts.maxActions
+      : (isEndlessMode() ? (discount < 1 ? 3 : 2) : 1)
+  ));
   const body = discount < 1
     ? "煤けた炉がまだ熱を帯びている。通常より少し安く鍛えられそうだ。"
     : "旅の鍛冶屋が小さな炉を据えている。\n「金さえあれば、今の装備を少しだけ強くできるぞ」";
   tellEvent(title, body, "shop");
   // 盗賊：鍛冶屋では値引きが効くことを短くログで伝える
   if (player.cls === "盗賊") tell("盗賊の交渉術！ 値引き価格で鍛えてもらえる。", "shop");
-  const entries = [
-    { kind: "normal", slot: "weapon", option: forgeOption("weapon", discount) },
-    { kind: "normal", slot: "armor", option: forgeOption("armor", discount) },
-  ];
-  if (isEndlessMode()) {
-    entries.push(
-      { kind: "scrap", slot: "weapon", option: scrapForgeOption("weapon", discount) },
-      { kind: "scrap", slot: "armor", option: scrapForgeOption("armor", discount) },
-      { kind: "awaken", slot: "weapon", option: awakenOption("weapon", discount) },
-      { kind: "awaken", slot: "armor", option: awakenOption("armor", discount) },
-    );
-  }
-  entries.push({ kind: "leave", option: { label: "立ち去る" } });
-  const idx = await ask(entries.map(e => e.option));
-  const entry = entries[idx];
-  if (!entry || entry.kind === "leave") return;
-  const slot = entry.slot;
-  if (entry.kind === "awaken") {
-    const before = getAwaken(slot);
-    const ok = awakenEquipment(slot, { discount, source: "forge" });
-    if (!ok) { tell("今は覚醒できない。", "dim"); return; }
-    const label = slot === "weapon" ? equipLabel("weapon") : equipLabel("armor");
-    tell(`深層の火が目覚めた。${label} は ★${before + 1} になった。`, "gold");
+  let actions = 0;
+  while (actions < maxActions) {
+    const entries = [
+      { kind: "normal", slot: "weapon", option: forgeOption("weapon", discount) },
+      { kind: "normal", slot: "armor", option: forgeOption("armor", discount) },
+    ];
+    if (isEndlessMode()) {
+      entries.push(
+        { kind: "scrap", slot: "weapon", option: scrapForgeOption("weapon", discount) },
+        { kind: "scrap", slot: "armor", option: scrapForgeOption("armor", discount) },
+        { kind: "awaken", slot: "weapon", option: awakenOption("weapon", discount) },
+        { kind: "awaken", slot: "armor", option: awakenOption("armor", discount) },
+      );
+    }
+    entries.push({ kind: "leave", option: { label: actions > 0 ? "鍛冶を終える" : "立ち去る", desc: `残り ${maxActions - actions} 回` } });
+    const idx = await ask(entries.map(e => e.option));
+    const entry = entries[idx];
+    if (!entry || entry.kind === "leave") return;
+    const slot = entry.slot;
+    let ok = false;
+    if (entry.kind === "awaken") {
+      const before = getAwaken(slot);
+      ok = awakenEquipment(slot, { discount, source: "forge" });
+      if (!ok) { tell("今は覚醒できない。", "dim"); continue; }
+      const label = slot === "weapon" ? equipLabel("weapon") : equipLabel("armor");
+      tell(`深層の火が目覚めた。${label} は ★${before + 1} になった。`, "gold");
+    } else {
+      const before = getEnhance(slot);
+      ok = entry.kind === "scrap"
+        ? enhanceEquipmentWithScrap(slot, { discount, source: "forge_scrap" })
+        : enhanceEquipment(slot, { discount, source: "forge" });
+      if (!ok) { tell("今は強化できない。", "dim"); continue; }
+      const label = slot === "weapon" ? equipLabel("weapon") : equipLabel("armor");
+      tell(`鍛冶の火花が散った。${label} は +${before + 1} になった。`, "gold");
+    }
+    actions += 1;
+    if (runStats) addRunStat("forgeVisitActions", 1, false);
     saveGame();
-    return;
+    if (actions < maxActions) tell(`炉の火はまだ残っている。（あと ${maxActions - actions} 回）`, "shop");
   }
-  const before = getEnhance(slot);
-  const ok = entry.kind === "scrap"
-    ? enhanceEquipmentWithScrap(slot, { discount, source: "forge_scrap" })
-    : enhanceEquipment(slot, { discount, source: "forge" });
-  if (!ok) { tell("今は強化できない。", "dim"); return; }
-  const label = slot === "weapon" ? equipLabel("weapon") : equipLabel("armor");
-  tell(`鍛冶の火花が散った。${label} は +${before + 1} になった。`, "gold");
-  saveGame();
+  tell("炉の火が静まった。", "dim");
 }
 function blessingOptions(isEndless = false, prepFloor = null) {
   // plus10: prepFloor === 30/35 のときだけ、深層準備系の祝福重みを少し上げる。
@@ -3676,81 +3774,131 @@ async function eventDepthCampfire() {
     await offerMinorDepthBlessing("深層の焚き火");
   }
 }
-// plus9: 36F専用の40F挑戦準備3択。3つの候補すべてが40F対策に寄与するよう構成。
-// 鍛冶上限・記憶上限はガード済み。preF40PreparationUsed フラグで記録。
-async function offerF40PrepChoice(sourceLabel) {
-  const pool = [];
-  pool.push({
-    id: "prep_heal", name: "生命の脈動", desc: "HPを大きく回復",
-    apply: () => {
-      const g = heal(player, Math.max(15, Math.floor(player.max_hp * 0.40)));
-      return `HPが ${g} 回復した。`;
-    },
-  });
-  pool.push({
-    id: "prep_vitality", name: "鋼の鼓動", desc: "最大HP +8",
-    apply: () => {
-      player.max_hp += 8;
-      player.hp = Math.min(player.max_hp, player.hp + 8);
-      return "最大HPが8上昇した。";
-    },
-  });
-  pool.push({
-    id: "prep_potion", name: "薬箱の記憶", desc: "ポーション ×1",
-    apply: () => {
-      player.inventory.push("ポーション");
-      return "ポーションを得た。";
-    },
-  });
-  if (canEnhance("weapon", 1, true) || canEnhance("armor", 1, true)) {
-    pool.push({
-      id: "prep_forge", name: "鎚の記憶", desc: "武器か防具を +1",
-      apply: () => {
-        const slots = ["weapon", "armor"].filter(s => canEnhance(s, 1, true));
-        const slot = slots.length === 2
-          ? (getEnhance("weapon") <= getEnhance("armor") ? "weapon" : "armor")
-          : slots[0];
-        if (!slot) return "鍛える装備がなかった。";
-        enhanceEquipment(slot, { free: true, source: "f40_prep" });
-        return `${slot === "weapon" ? equipLabel("weapon") : equipLabel("armor")} が強化された。`;
-      },
-    });
-  }
-  if (canAddMemory()) {
+function finalDepthCampChoiceLabel(id) {
+  return ({ rest: "休む", forge: "鍛える", memory: "記憶", pray: "祈る", leave: "立ち去る" })[id] || id || "使用";
+}
+async function eventFinalDepthCamp() {
+  if (!isEndlessMode() || !runStats || runStats.finalDepthCampUsed) return;
+  tellEvent("最後の支度場", "40F魔王の気配がすぐ近くにある。ここで最後の手入れができる。", "shop");
+  const canMemory = canAddMemory();
+  const opts = [
+    { id: "rest", label: "休む", desc: "HPを中回復" },
+    { id: "forge", label: "鍛える", desc: "GOLD/素材で最大2回" },
+    { id: "memory", label: "記憶", desc: canMemory ? "記憶効果候補" : "記憶枠なし", disabled: !canMemory },
+    { id: "pray", label: "祈る", desc: "最大HP +8" },
+    { id: "leave", label: "立ち去る" },
+  ];
+  const idx = await ask(opts.map(o => ({ label: o.label, desc: o.desc, disabled: o.disabled })));
+  const chosen = opts[idx] || opts[opts.length - 1];
+  runStats.finalDepthCampUsed = true;
+  runStats.finalDepthCampChoice = chosen.id;
+  if (chosen.id === "rest") {
+    const g = heal(player, Math.max(18, Math.floor(player.max_hp * 0.35)));
+    tell(`火にあたり、HPが ${g} 回復した。`, "heal");
+  } else if (chosen.id === "forge") {
+    await eventForge(0.9, "最後の支度場の炉", { maxActions: 2 });
+  } else if (chosen.id === "memory") {
     const owned = player.memoryEffects || [];
     const candidates = MEMORY_EFFECTS.filter(e => owned.indexOf(e.id) < 0);
     if (candidates.length > 0) {
       const def = choice(candidates);
-      pool.push({
-        id: "prep_memory:" + def.id,
-        name: `記憶効果: ${def.name}`,
-        desc: def.desc,
-        apply: () => { addMemoryEffect(def.id, "B36F前準備"); return ""; },
-        isMemory: true,
-      });
+      addMemoryEffect(def.id, "最後の支度場");
+      tell(`${def.name}を得た。`, "gold");
     }
+  } else if (chosen.id === "pray") {
+    player.max_hp += 8;
+    player.hp = Math.min(player.max_hp, player.hp + 8);
+    tell("祈りが身を支えた。最大HPが8上昇した。", "heal");
+  } else {
+    tell("最後の支度場を後にした。", "dim");
   }
-  for (const opt of buildDepthNeedSupportPool(pool, 36)) pool.push(opt);
-  let opts = [];
-  const work = [...pool];
-  while (opts.length < 3 && work.length) {
-    const i = rand(work.length);
-    opts.push(work.splice(i, 1)[0]);
+  renderStatus();
+  saveGame();
+}
+// plus13: 36Fは欠片・素材・GOLDを40F前に使い切るための固定支度場。
+// 鍛冶上限・記憶上限はガード済み。preF40PreparationUsed フラグで記録。
+async function offerF40PrepChoice(sourceLabel) {
+  const shardCount = () => loadMeta().shards || 0;
+  const spendForPrep = (n, choice) => {
+    if (!spendMetaShards(n)) return false;
+    if (runStats) {
+      runStats.depthPrepEventUsed = true;
+      addRunStat("depthPrepEventShardsSpent", n, false);
+      runStats.blessingChoices = runStats.blessingChoices || [];
+      runStats.blessingChoices.push({ id: choice.id, name: choice.name, floor: player.floor, source: sourceLabel });
+    }
+    return true;
+  };
+  let memoryCandidate = null;
+  if (canAddMemory()) {
+    const owned = player.memoryEffects || [];
+    const candidates = MEMORY_EFFECTS.filter(e => owned.indexOf(e.id) < 0);
+    if (candidates.length > 0) memoryCandidate = choice(candidates);
   }
-  opts = injectDepthSupportOption(opts, 36);
-  tellEvent(sourceLabel, "40Fの気配が濃い。挑戦前の備えを1つ選べ。", "shop");
-  const idx = await ask(opts.map(o => ({ label: o.name, desc: o.desc })));
-  const chosen = opts[idx];
-  const result = chosen.apply();
-  if (chosen.isMemory && chosen.classSupport && runStats) {
-    runStats.depthClassSupportUsed = true;
-    noteDepthSupport("魔導士:記憶候補");
+  const options = [
+    {
+      id: "prep36_weapon", name: "武器+1", desc: "欠片2で武器を鍛える",
+      disabled: shardCount() < 2 || !canEnhance("weapon", 1, true),
+      apply: async () => {
+        const chosen = options[0];
+        if (!spendForPrep(2, chosen)) return "欠片が足りなかった。";
+        enhanceEquipment("weapon", { free: true, source: "f36_prep" });
+        return `${equipLabel("weapon")} が強化された。`;
+      },
+    },
+    {
+      id: "prep36_armor", name: "防具+1", desc: "欠片2で防具を鍛える",
+      disabled: shardCount() < 2 || !canEnhance("armor", 1, true),
+      apply: async () => {
+        const chosen = options[1];
+        if (!spendForPrep(2, chosen)) return "欠片が足りなかった。";
+        enhanceEquipment("armor", { free: true, source: "f36_prep" });
+        return `${equipLabel("armor")} が強化された。`;
+      },
+    },
+    {
+      id: "prep36_heal", name: "回復支度", desc: "欠片1でHP回復+ポーション",
+      disabled: shardCount() < 1,
+      apply: async () => {
+        const chosen = options[2];
+        if (!spendForPrep(1, chosen)) return "欠片が足りなかった。";
+        player.inventory.push("ポーション");
+        const g = heal(player, Math.max(18, Math.floor(player.max_hp * 0.35)));
+        return `HPが ${g} 回復し、ポーションを得た。`;
+      },
+    },
+    {
+      id: "prep36_memory", name: "記憶調整", desc: memoryCandidate ? `欠片2: ${memoryCandidate.name}` : "記憶枠なし",
+      disabled: shardCount() < 2 || !memoryCandidate,
+      apply: async () => {
+        const chosen = options[3];
+        if (!memoryCandidate) return "記憶を整える余地がなかった。";
+        if (!spendForPrep(2, chosen)) return "欠片が足りなかった。";
+        addMemoryEffect(memoryCandidate.id, "B36F支度場");
+        return `${memoryCandidate.name}を得た。`;
+      },
+    },
+    {
+      id: "prep36_forge", name: "鍛冶場", desc: "GOLD/素材で最大2回",
+      apply: async () => {
+        if (runStats) runStats.depthPrepEventUsed = true;
+        await eventForge(0.9, "B36F 支度場の炉", { maxActions: 2 });
+        return "";
+      },
+    },
+    { id: "leave", name: "立ち去る", desc: "準備を終える", apply: async () => "" },
+  ];
+  tellEvent(sourceLabel, `40Fの気配が濃い。欠片 ${shardCount()} 個、素材、GOLDをここで使える。`, "shop");
+  const idx = await ask(options.map(o => ({ label: o.name, desc: o.desc, disabled: o.disabled })));
+  const chosen = options[idx];
+  if (!chosen || chosen.id === "leave") {
+    tell("支度場を後にした。", "dim");
+    return;
   }
+  const result = await chosen.apply();
   if (runStats) {
-    runStats.blessingChoices = runStats.blessingChoices || [];
-    runStats.blessingChoices.push({ id: chosen.id, name: chosen.name, floor: player.floor, source: sourceLabel });
     runStats.preF40PreparationUsed = true;
-    addRunStat("blessingCount", 1, false);
+    if (chosen.id !== "prep36_forge") addRunStat("blessingCount", 1, false);
   }
   if (result) tell(`${chosen.name}を選んだ。${result}`, "gold");
   renderStatus();
@@ -3770,7 +3918,7 @@ async function eventDepthMilestone() {
   }
   const events = [
     eventDepthCampfire,
-    () => eventForge(0.8, "忘れられた鍛冶場"),
+    () => eventForge(0.8, "忘れられた鍛冶場", { maxActions: 3 }),
     () => offerMinorDepthBlessing("記憶の分岐路"),
   ];
   await choice(events)();
@@ -4398,7 +4546,10 @@ async function startNewGame(mode = "story") {
 
   // 記憶の商人（欠片で開始準備を整える機会）— 深層探索でも使える
   await showMemoryMerchant();
-  if (mode === "endless") await offerDepthPrepChoice();
+  if (mode === "endless") {
+    await offerDepthStartGearChoice();
+    await offerDepthPrepChoice();
+  }
 
   await pause(mode === "endless" ? "深層へ降りる" : "迷宮に入る");
   return true;
@@ -4853,6 +5004,8 @@ function buildRunSummary(kind, score, reason) {
     forgeCap: typeof forgeLimit === "function" ? forgeLimit() : null,
     currentWeaponEnhance: player.weaponEnhance || 0,
     currentArmorEnhance:  player.armorEnhance || 0,
+    depthStartWeapon: runStats.depthStartWeapon || "",
+    depthStartArmor: runStats.depthStartArmor || "",
     // plus9: 40F局所緩和の確認用
     currentBossFloor: runStats.currentBossFloor,
     bossHp: runStats.bossHp,
@@ -4892,6 +5045,12 @@ function buildRunSummary(kind, score, reason) {
     oldGearDismantled: runStats.oldGearDismantled || 0,
     oldWeaponDismantled: runStats.oldWeaponDismantled || 0,
     oldArmorDismantled: runStats.oldArmorDismantled || 0,
+    // plus13: 40F前準備導線
+    depthPrepEventUsed: !!(runStats.depthPrepEventUsed),
+    depthPrepEventShardsSpent: runStats.depthPrepEventShardsSpent || 0,
+    finalDepthCampUsed: !!(runStats.finalDepthCampUsed),
+    finalDepthCampChoice: runStats.finalDepthCampChoice || "",
+    forgeVisitActions: runStats.forgeVisitActions || 0,
     reason,
     date: new Date().toISOString(),
   };
@@ -5047,6 +5206,17 @@ function buildEndCard(kind, reason) {
         <tr><td>${escapeHtml((runStats.depthPrep && runStats.depthPrep.name) || (player.depthPrep && player.depthPrep.name) || "支度")}</td><td>${runStats.depthPrepShardsSpent || 0} 欠片</td></tr>
       </table>`
     : "";
+  const depthStartGearBlock = isEndless && (runStats.depthStartWeapon || runStats.depthStartArmor)
+    ? `<h3>開始装備</h3><table>
+        <tr><td>武器 / 防具</td><td>${escapeHtml(runStats.depthStartWeapon || "なし")} / ${escapeHtml(runStats.depthStartArmor || "なし")}</td></tr>
+      </table>`
+    : "";
+  const depthPrepEventBlock = isEndless && ((runStats.depthPrepEventUsed || false) || (runStats.finalDepthCampUsed || false))
+    ? `<h3>40F前準備</h3><table>
+        ${runStats.depthPrepEventUsed ? `<tr><td>B36支度場</td><td>${runStats.depthPrepEventShardsSpent || 0} 欠片</td></tr>` : ""}
+        ${runStats.finalDepthCampUsed ? `<tr><td>B39支度場</td><td>${escapeHtml(finalDepthCampChoiceLabel(runStats.finalDepthCampChoice))}</td></tr>` : ""}
+      </table>`
+    : "";
   const depthPassiveBlock = isEndless && ((runStats.depthPassiveTriggers || 0) > 0 || (runStats.depthExtraScrapsGained || 0) > 0)
     ? `<h3>深層の心得</h3><table>
         <tr><td>発動</td><td>${runStats.depthPassiveTriggers || 0} 回</td></tr>
@@ -5096,7 +5266,9 @@ function buildEndCard(kind, reason) {
     ${skillsBlock}
     ${blessingBlock}
     ${forgeBlock}
+    ${depthStartGearBlock}
     ${depthPrepBlock}
+    ${depthPrepEventBlock}
     ${scrapBlock}
     ${depthPassiveBlock}
     ${depthSupportBlock}
@@ -5249,6 +5421,7 @@ function initDebugBar() {
       <button data-floor="30">30</button>
       <button data-floor="35">35</button>
       <button data-floor="36">36</button>
+      <button data-floor="39">39</button>
       <button data-floor="40">40</button>
       <button data-floor="45">45</button>
       <button data-floor="60">60</button>
@@ -5392,6 +5565,10 @@ function initDebugBar() {
       awaken: `武器★${player.weaponAwaken || 0}/防具★${player.armorAwaken || 0}`,
       prep: player.depthPrep ? player.depthPrep.name : "なし",
       passives: depthPassivesSummary(loadMeta()) || "なし",
+      startGear: runStats ? `${runStats.depthStartWeapon || "?"}/${runStats.depthStartArmor || "?"}` : "—",
+      prep36: runStats ? `${!!runStats.depthPrepEventUsed} shards=${runStats.depthPrepEventShardsSpent || 0}` : "—",
+      camp39: runStats ? `${!!runStats.finalDepthCampUsed} ${runStats.finalDepthCampChoice || ""}` : "—",
+      forgeVisitActions: runStats ? (runStats.forgeVisitActions || 0) : 0,
       kills: runStats ? runStats.kills : 0,
       depthBoss: runStats ? runStats.depthBossKills : 0,
       blessings: runStats ? (runStats.blessingChoices || []).length : 0,
@@ -5408,6 +5585,7 @@ function initDebugBar() {
     dlog(`武=${dump.weapon} 防=${dump.armor} 撃破${dump.kills} 深層B${dump.depthBoss} 祝福${dump.blessings}`);
     dlog(`素材=${dump.scraps} 覚醒=${dump.awaken}`);
     dlog(`支度=${dump.prep} 深層心得=${dump.passives}`);
+    dlog(`開始装備=${dump.startGear} B36=${dump.prep36} B39=${dump.camp39} 鍛冶行動=${dump.forgeVisitActions}`);
     dlog(`記憶=${dump.memories} エリート=${dump.elite}`);
     dlog(`直近ボス=${dump.boss}`);
     if (dump.support) dlog(`深層補助=${dump.support}`);
@@ -5442,7 +5620,7 @@ async function gameLoop() {
             } else {
               const fns = [
                 eventDepthCampfire,
-                () => eventForge(0.8, "忘れられた鍛冶場"),
+                () => eventForge(0.8, "忘れられた鍛冶場", { maxActions: 3 }),
                 () => offerMinorDepthBlessing("記憶の分岐路"),
               ];
               await fns[Math.floor(Math.random() * fns.length)]();
@@ -5476,7 +5654,9 @@ async function gameLoop() {
       const bossFloor = isEndlessMode()
         ? isEndlessBossFloor(player.floor)
         : BOSS_FLOORS.has(player.floor);
-      if (bossFloor) {
+      if (isEndlessMode() && player.floor === 39 && runStats && !runStats.finalDepthCampUsed) {
+        await eventFinalDepthCamp();
+      } else if (bossFloor) {
         await eventBoss();
       } else if (isMilestoneFloor(player.floor) && runStats.milestoneFloors && !runStats.milestoneFloors[player.floor]) {
         // 深層ボス直後の階（31/41/51F…）で節目イベントを1回だけ発火し、通常イベント抽選を置換
