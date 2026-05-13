@@ -482,7 +482,7 @@ input.text-input:focus { border-color: var(--accent); }
 // ====================================================================
 const FINAL_FLOOR = 20;
 const BOSS_FLOORS = new Set([5, 10, 15, 20]);
-const APP_VERSION = "v20260510-rogue-plus13";
+const APP_VERSION = "v20260510-rogue-plus14";
 // 開発確認用：URLに ?debug=1 が付いているときだけ有効化する。
 // 通常プレイでは false 固定で、UIも出ない。
 const DEBUG_MODE = (() => {
@@ -490,7 +490,7 @@ const DEBUG_MODE = (() => {
   catch { return false; }
 })();
 
-const FORGE_COSTS = [0, 60, 100, 160, 240, 340];
+const FORGE_COSTS = [0, 60, 100, 160, 240, 340, 480, 650, 850, 1100, 1400];
 const STORY_FORGE_LIMIT = 3;
 const ENDLESS_FORGE_LIMIT = 5;
 const SCRAP_FORGE_RATE = 0.60;
@@ -583,6 +583,7 @@ const DEPTH_PREPS = [
 ];
 const DEPTH_START_WEAPONS = ["鋼の剣", "炎の剣", "木の棒"];
 const DEPTH_START_ARMORS = ["鋼の鎧", "聖なる鎧", "革の鎧"];
+const LEGACY_ENHANCE_MAX = 5;
 const DEPTH_PASSIVES = [
   { id: "deepForge", name: "深層鍛冶術", maxLv: 3, costs: [3, 5, 8], desc: "深層分解時、低確率で片+1" },
   { id: "deepSupply", name: "補給の心得", maxLv: 3, costs: [3, 5, 8], desc: "深層の補給/回復候補が少し出やすい" },
@@ -914,6 +915,18 @@ function recordRunResult(kind, score, reason) {
     finalDepthCampUsed: runStats ? !!runStats.finalDepthCampUsed : false,
     finalDepthCampChoice: runStats ? (runStats.finalDepthCampChoice || "") : "",
     forgeVisitActions: runStats ? (runStats.forgeVisitActions || 0) : 0,
+    legacyWeaponUsed: runStats ? !!runStats.legacyWeaponUsed : false,
+    legacyArmorUsed: runStats ? !!runStats.legacyArmorUsed : false,
+    legacyWeaponCost: runStats ? (runStats.legacyWeaponCost || 0) : 0,
+    legacyArmorCost: runStats ? (runStats.legacyArmorCost || 0) : 0,
+    legacyWeaponRegistered: runStats ? !!runStats.legacyWeaponRegistered : false,
+    legacyArmorRegistered: runStats ? !!runStats.legacyArmorRegistered : false,
+    legacyWeaponName: runStats ? (runStats.legacyWeaponName || "") : "",
+    legacyArmorName: runStats ? (runStats.legacyArmorName || "") : "",
+    maxEnhanceCapReached: runStats ? (runStats.maxEnhanceCapReached || forgeLimit()) : forgeLimit(),
+    f80BossTuned: runStats ? !!runStats.f80BossTuned : false,
+    demonKingTuning: runStats ? runStats.demonKingTuning : null,
+    demonKingTelegraphUsed: runStats ? (runStats.demonKingTelegraphUsed || 0) : 0,
     miniGoal: snapshotMiniGoal(),
     evaluation: determineRunEvaluation(kind),
     replay: buildReplayLine(),
@@ -1025,6 +1038,8 @@ const DEFAULT_META = {
   totalShards: 0,
   upgrades: { potion: 0, vitality: 0, purse: 0, amulet: 0 },
   depthPassives: { deepForge: 0, deepSupply: 0, deepMemory: 0 },
+  depthLegacyWeapon: null,
+  depthLegacyArmor: null,
   memoryMerchant: {
     currentStock: [],     // 一時の在庫
     rerolled: false,      // 1冒険1回までのリロール使用フラグ
@@ -1033,6 +1048,20 @@ const DEFAULT_META = {
     purchasedItems: [],   // 再ロード時に再適用するための購入履歴
   },
 };
+function normalizeLegacyGear(g, slot) {
+  if (!g || typeof g !== "object" || typeof g.name !== "string") return null;
+  const info = ITEMS[g.name];
+  if (!info || info.category !== slot) return null;
+  const rawEnh = Number(g.enhance);
+  const enhance = Math.max(0, Math.min(LEGACY_ENHANCE_MAX, Math.floor(isFinite(rawEnh) ? rawEnh : 0)));
+  const rawFloor = Number(g.sourceFloor);
+  return {
+    name: g.name,
+    enhance,
+    sourceFloor: Math.max(0, Math.floor(isFinite(rawFloor) ? rawFloor : 0)),
+    registeredAt: typeof g.registeredAt === "string" ? g.registeredAt : "",
+  };
+}
 function loadMeta() {
   const m = loadJSON(META_KEY, null);
   const def = JSON.parse(JSON.stringify(DEFAULT_META));
@@ -1053,6 +1082,8 @@ function loadMeta() {
     ...m,
     upgrades,
     depthPassives,
+    depthLegacyWeapon: normalizeLegacyGear(m.depthLegacyWeapon, "weapon"),
+    depthLegacyArmor: normalizeLegacyGear(m.depthLegacyArmor, "armor"),
     memoryMerchant: {
       ...def.memoryMerchant,
       ...mm,
@@ -1189,6 +1220,19 @@ function newRunStats(mode = "story") {
     finalDepthCampUsed: false,
     finalDepthCampChoice: "",
     forgeVisitActions: 0,
+    // plus14: 深層遺品・上限拡張・魔王系再設計
+    legacyWeaponUsed: false,
+    legacyArmorUsed: false,
+    legacyWeaponCost: 0,
+    legacyArmorCost: 0,
+    legacyWeaponRegistered: false,
+    legacyArmorRegistered: false,
+    legacyWeaponName: "",
+    legacyArmorName: "",
+    maxEnhanceCapReached: ENDLESS_FORGE_LIMIT,
+    f80BossTuned: false,
+    demonKingTuning: null,
+    demonKingTelegraphUsed: 0,
     // ビルド・鍛冶・祝福
     blessingChoices: [],
     blessingCount: 0,
@@ -1278,6 +1322,8 @@ function normalizeRunStats(rs) {
     "depthPrepShardsSpent", "depthPassiveTriggers", "depthExtraScrapsGained",
     "oldGearDismantled", "oldWeaponDismantled", "oldArmorDismantled",
     "depthPrepEventShardsSpent", "forgeVisitActions",
+    "legacyWeaponCost", "legacyArmorCost", "maxEnhanceCapReached",
+    "demonKingTelegraphUsed",
   ].forEach(k => {
     if (typeof out[k] !== "number" || !isFinite(out[k]) || out[k] < 0) out[k] = 0;
     out[k] = Math.floor(out[k]);
@@ -1287,6 +1333,14 @@ function normalizeRunStats(rs) {
   if (typeof out.depthPrepEventUsed !== "boolean") out.depthPrepEventUsed = false;
   if (typeof out.finalDepthCampUsed !== "boolean") out.finalDepthCampUsed = false;
   if (typeof out.finalDepthCampChoice !== "string") out.finalDepthCampChoice = "";
+  if (typeof out.legacyWeaponUsed !== "boolean") out.legacyWeaponUsed = false;
+  if (typeof out.legacyArmorUsed !== "boolean") out.legacyArmorUsed = false;
+  if (typeof out.legacyWeaponRegistered !== "boolean") out.legacyWeaponRegistered = false;
+  if (typeof out.legacyArmorRegistered !== "boolean") out.legacyArmorRegistered = false;
+  if (typeof out.legacyWeaponName !== "string") out.legacyWeaponName = "";
+  if (typeof out.legacyArmorName !== "string") out.legacyArmorName = "";
+  if (!out.demonKingTuning || typeof out.demonKingTuning !== "object") out.demonKingTuning = null;
+  if (typeof out.f80BossTuned !== "boolean") out.f80BossTuned = false;
   [
     "classFeatureTriggers",
     "warriorCounters", "warriorDefends", "warriorBossKills",
@@ -1341,7 +1395,9 @@ function normalizePlayer(p) {
   p.weaponAwaken = Math.min(AWAKEN_MAX_LEVEL, Math.floor(p.weaponAwaken));
   p.armorAwaken  = Math.min(AWAKEN_MAX_LEVEL, Math.floor(p.armorAwaken));
   if (p.depthPrep && typeof p.depthPrep !== "object") p.depthPrep = null;
-  const lim = p.mode === "endless" ? ENDLESS_FORGE_LIMIT : STORY_FORGE_LIMIT;
+  const lim = p.mode === "endless"
+    ? (p.floor >= 81 ? 10 : p.floor >= 61 ? 9 : p.floor >= 41 ? 7 : ENDLESS_FORGE_LIMIT)
+    : STORY_FORGE_LIMIT;
   p.weaponEnhance = Math.min(lim, Math.floor(p.weaponEnhance));
   p.armorEnhance = Math.min(lim, Math.floor(p.armorEnhance));
   return p;
@@ -1467,8 +1523,55 @@ function makeEndlessBoss(floor) {
   applyEndlessBossBreakpointTuning(m, floor);
   return m;
 }
-// plus13: 40Fは難易度別に再調整し、物語/標準では準備込みで挑める壁にする。
-// plus12: 35Fは鋼セットでも勝負になる中間試験へ再調整。60Fは既存補正を維持。
+const DEMON_KING_TUNING = {
+  40: {
+    story:     { hp: 0.72, atk: 0.76 },
+    normal:    { hp: 0.75, atk: 0.80 },
+    challenge: { hp: 0.84, atk: 0.88 },
+  },
+  60: {
+    story:     { hp: 0.78, atk: 0.84 },
+    normal:    { hp: 0.78, atk: 0.84 },
+    challenge: { hp: 0.78, atk: 0.84 },
+  },
+  80: {
+    story:     { hp: 0.68, atk: 0.78 },
+    normal:    { hp: 0.70, atk: 0.80 },
+    challenge: { hp: 0.72, atk: 0.82 },
+  },
+  100: {
+    story:     { hp: 0.72, atk: 0.82 },
+    normal:    { hp: 0.75, atk: 0.84 },
+    challenge: { hp: 0.78, atk: 0.86 },
+  },
+};
+function isDemonKingDepthFloor(floor) {
+  return floor === 40 || floor === 60 || floor === 80 || floor === 100;
+}
+function applyEndlessDemonKingTuning(m, floor) {
+  if (!m || !isDemonKingDepthFloor(floor)) return false;
+  const table = DEMON_KING_TUNING[floor] || DEMON_KING_TUNING[100];
+  const d = currentDifficulty();
+  const tuned = table[d] || table.challenge;
+  m.hp  = Math.max(1, Math.floor(m.hp  * tuned.hp));
+  m.atk = Math.max(1, Math.floor(m.atk * tuned.atk));
+  m.bossBreakpointTuned = true;
+  m.demonKingTuned = true;
+  m.demonKingTelegraph = true;
+  if (floor === 40) m.f40BossTuned = true;
+  if (floor === 60) m.f60BossTuned = true;
+  if (floor === 80) m.f80BossTuned = true;
+  if (runStats) {
+    runStats.bossBreakpointTuned = true;
+    runStats.demonKingTuning = { floor, difficulty: d, hpMul: tuned.hp, atkMul: tuned.atk };
+    if (floor === 40) runStats.f40BossTuned = true;
+    if (floor === 60) runStats.f60BossTuned = true;
+    if (floor === 80) runStats.f80BossTuned = true;
+  }
+  return true;
+}
+// plus14: 魔王系は専用テーブルで再設計。plus13の40F意図は維持し、80Fを大きく調整。
+// plus12: 35Fは鋼セットでも勝負になる中間試験へ再調整。
 // 25/30/45F・本編20Fには影響しない。
 // 35F例: 標準 HP 491→402, ATK 45→39 / 挑戦 HP 517→423, ATK 51→44
 // 40F例: 物語 HP 884→636, ATK 59→44 / 標準 HP 988→741, ATK 66→52 / 挑戦 HP 1040→873, ATK 74→65
@@ -1481,28 +1584,7 @@ function applyEndlessBossBreakpointTuning(m, floor) {
     if (runStats) runStats.f35BossTuned = true;
     return;
   }
-  if (floor === 60) {
-    m.hp  = Math.max(1, Math.floor(m.hp  * 0.78));
-    m.atk = Math.max(1, Math.floor(m.atk * 0.84));
-    m.f60BossTuned = true;
-    if (runStats) runStats.f60BossTuned = true;
-    return;
-  }
-  if (floor !== 40) return;
-  const d = currentDifficulty();
-  const tuned = {
-    story:     { hp: 0.72, atk: 0.76 },
-    normal:    { hp: 0.75, atk: 0.80 },
-    challenge: { hp: 0.84, atk: 0.88 },
-  }[d] || { hp: 0.84, atk: 0.88 };
-  m.hp  = Math.max(1, Math.floor(m.hp  * tuned.hp));
-  m.atk = Math.max(1, Math.floor(m.atk * tuned.atk));
-  m.bossBreakpointTuned = true;
-  m.f40BossTuned = true;
-  if (runStats) {
-    runStats.bossBreakpointTuned = true;
-    runStats.f40BossTuned = true;
-  }
+  applyEndlessDemonKingTuning(m, floor);
 }
 
 function makeMonster(name) {
@@ -1862,12 +1944,40 @@ function spendMetaShards(amount) {
   saveMeta(meta);
   return true;
 }
+function legacyCarryCost(legacy) {
+  return legacy ? Math.max(0, Math.min(5, Math.floor(legacy.enhance || 0))) : 0;
+}
+function compressLegacyEnhance(value) {
+  const v = Math.max(0, Math.floor(value || 0));
+  if (v <= 2) return 0;
+  if (v <= 4) return 1;
+  if (v <= 6) return 2;
+  if (v <= 8) return 3;
+  if (v <= 10) return 4;
+  return LEGACY_ENHANCE_MAX;
+}
+function legacyLabel(legacy) {
+  if (!legacy) return "なし";
+  const f = legacy.sourceFloor ? ` B${legacy.sourceFloor}F` : "";
+  return `${legacy.name} +${legacy.enhance}${f}`;
+}
 function depthStartGearOption(item, slot) {
   const info = ITEMS[item];
   const stat = slot === "weapon" ? `攻+${info.atk}` : `防+${info.defense}`;
   return { item, label: item, desc: `${stat} / ${info.desc}` };
 }
-function setDepthStartGear(slot, item) {
+function depthStartLegacyOption(legacy, slot, meta) {
+  const cost = legacyCarryCost(legacy);
+  const kind = slot === "weapon" ? "武器" : "防具";
+  return {
+    item: legacy.name,
+    legacy,
+    label: `遺品${kind}: ${legacy.name} +${legacy.enhance}`,
+    desc: `欠片${cost} / 覚醒なし${meta.shards < cost ? "（欠片不足）" : ""}`,
+    disabled: meta.shards < cost,
+  };
+}
+function setDepthStartGear(slot, item, opts = {}) {
   if (!player || !ITEMS[item]) return;
   const key = slot === "weapon" ? "weapon" : "armor";
   const enhanceKey = slot === "weapon" ? "weaponEnhance" : "armorEnhance";
@@ -1877,31 +1987,60 @@ function setDepthStartGear(slot, item) {
   if (old && old !== item && purchasedOld) player.inventory.push(old);
   removeOne(player.inventory, item);
   player[key] = item;
-  player[enhanceKey] = 0;
+  const enhance = Math.max(0, Math.min(enhanceCapForFloor(player.floor), Math.floor(opts.enhance || 0)));
+  player[enhanceKey] = enhance;
   player[awakenKey] = 0;
 }
 async function offerDepthStartGearChoice() {
   if (!player || player.mode !== "endless" || !runStats) return;
-  tellEvent("🌑 深層開始装備", "深層へ入る前に、今回の武器と防具を整える。欠片は使わない。", "shop");
+  tellEvent("🌑 深層開始装備", "深層へ入る前に、今回の武器と防具を整える。遺品は強化値に応じて欠片を使う。", "shop");
+  let meta = loadMeta();
   const weaponOptions = DEPTH_START_WEAPONS
     .filter(it => ITEMS[it] && ITEMS[it].category === "weapon")
     .map(it => depthStartGearOption(it, "weapon"));
+  if (meta.depthLegacyWeapon) weaponOptions.push(depthStartLegacyOption(meta.depthLegacyWeapon, "weapon", meta));
   if (player.weapon && !weaponOptions.some(o => o.item === player.weapon)) {
     weaponOptions.unshift({ item: player.weapon, label: `今の武器: ${player.weapon}`, desc: ITEMS[player.weapon].desc });
   }
-  const wIdx = await ask(weaponOptions.map(o => ({ label: o.label, desc: o.desc })));
-  const weapon = weaponOptions[wIdx] && weaponOptions[wIdx].item;
-  if (weapon) setDepthStartGear("weapon", weapon);
+  const wIdx = await ask(weaponOptions.map(o => ({ label: o.label, desc: o.desc, disabled: o.disabled })));
+  const weaponOpt = weaponOptions[wIdx];
+  if (weaponOpt && weaponOpt.item) {
+    if (weaponOpt.legacy) {
+      const cost = legacyCarryCost(weaponOpt.legacy);
+      if (spendMetaShards(cost)) {
+        setDepthStartGear("weapon", weaponOpt.item, { enhance: weaponOpt.legacy.enhance });
+        runStats.legacyWeaponUsed = true;
+        runStats.legacyWeaponCost = cost;
+        runStats.legacyWeaponName = weaponOpt.item;
+      }
+    } else {
+      setDepthStartGear("weapon", weaponOpt.item);
+    }
+  }
 
+  meta = loadMeta();
   const armorOptions = DEPTH_START_ARMORS
     .filter(it => ITEMS[it] && ITEMS[it].category === "armor")
     .map(it => depthStartGearOption(it, "armor"));
+  if (meta.depthLegacyArmor) armorOptions.push(depthStartLegacyOption(meta.depthLegacyArmor, "armor", meta));
   if (player.armor && !armorOptions.some(o => o.item === player.armor)) {
     armorOptions.unshift({ item: player.armor, label: `今の防具: ${player.armor}`, desc: ITEMS[player.armor].desc });
   }
-  const aIdx = await ask(armorOptions.map(o => ({ label: o.label, desc: o.desc })));
-  const armor = armorOptions[aIdx] && armorOptions[aIdx].item;
-  if (armor) setDepthStartGear("armor", armor);
+  const aIdx = await ask(armorOptions.map(o => ({ label: o.label, desc: o.desc, disabled: o.disabled })));
+  const armorOpt = armorOptions[aIdx];
+  if (armorOpt && armorOpt.item) {
+    if (armorOpt.legacy) {
+      const cost = legacyCarryCost(armorOpt.legacy);
+      if (spendMetaShards(cost)) {
+        setDepthStartGear("armor", armorOpt.item, { enhance: armorOpt.legacy.enhance });
+        runStats.legacyArmorUsed = true;
+        runStats.legacyArmorCost = cost;
+        runStats.legacyArmorName = armorOpt.item;
+      }
+    } else {
+      setDepthStartGear("armor", armorOpt.item);
+    }
+  }
 
   runStats.depthStartWeapon = player.weapon || "";
   runStats.depthStartArmor = player.armor || "";
@@ -2038,8 +2177,18 @@ function checkMiniGoalProgress() {
   grantMiniGoalReward(goal);
   tell(`ミニ目標達成！ ${miniGoalRewardText(goal)} を得た。`, "gold");
 }
+function enhanceCapForFloor(floor = player && player.floor) {
+  if (!isEndlessMode()) return STORY_FORGE_LIMIT;
+  const f = Math.max(21, Math.floor(floor || 21));
+  if (f >= 81) return 10;
+  if (f >= 61) return 9;
+  if (f >= 41) return 7;
+  return ENDLESS_FORGE_LIMIT;
+}
 function forgeLimit() {
-  return isEndlessMode() ? ENDLESS_FORGE_LIMIT : STORY_FORGE_LIMIT;
+  const cap = enhanceCapForFloor();
+  if (runStats) runStats.maxEnhanceCapReached = Math.max(runStats.maxEnhanceCapReached || 0, cap);
+  return cap;
 }
 function getEnhance(slot) {
   return slot === "weapon" ? (player.weaponEnhance || 0) : (player.armorEnhance || 0);
@@ -2095,19 +2244,26 @@ function setScrapsForSlot(slot, value) {
   if (slot === "weapon") player.weaponScraps = v;
   else player.armorScraps = v;
 }
+function scrapRequirementForNext(slot) {
+  const next = getEnhance(slot) + 1;
+  if (next >= 8) return 3;
+  if (next >= 6) return 2;
+  return 1;
+}
 function scrapForgeCost(slot, discount = 1) {
   return Math.max(SCRAP_FORGE_MIN_GOLD, Math.floor(forgeCost(slot, discount) * SCRAP_FORGE_RATE));
 }
 function canScrapEnhance(slot, discount = 1) {
   if (!isEndlessMode()) return false;
   if (!canEnhance(slot, discount, true)) return false;
-  return scrapsForSlot(slot) >= 1 && player.gold >= scrapForgeCost(slot, discount);
+  return scrapsForSlot(slot) >= scrapRequirementForNext(slot) && player.gold >= scrapForgeCost(slot, discount);
 }
 function enhanceEquipmentWithScrap(slot, opts = {}) {
   const discount = typeof opts.discount === "number" ? opts.discount : 1;
   if (!canScrapEnhance(slot, discount)) return false;
   const cost = scrapForgeCost(slot, discount);
-  setScrapsForSlot(slot, scrapsForSlot(slot) - 1);
+  const req = scrapRequirementForNext(slot);
+  setScrapsForSlot(slot, scrapsForSlot(slot) - req);
   player.gold -= cost;
   const next = getEnhance(slot) + 1;
   setEnhance(slot, next);
@@ -2115,11 +2271,11 @@ function enhanceEquipmentWithScrap(slot, opts = {}) {
     if (slot === "weapon") {
       runStats.maxWeaponEnhance = Math.max(runStats.maxWeaponEnhance || 0, next);
       addRunStat("forgeWeaponCount", 1, false);
-      addRunStat("weaponScrapsUsed", 1, false);
+      addRunStat("weaponScrapsUsed", req, false);
     } else {
       runStats.maxArmorEnhance = Math.max(runStats.maxArmorEnhance || 0, next);
       addRunStat("forgeArmorCount", 1, false);
-      addRunStat("armorScrapsUsed", 1, false);
+      addRunStat("armorScrapsUsed", req, false);
     }
     addRunStat("forgeGoldSpent", cost, false);
     addRunStat("forgeWithScrapsCount", 1, false);
@@ -2211,6 +2367,9 @@ function renderStatus() {
   const prepInfo = (player.mode === "endless" && player.depthPrep && player.depthPrep.name)
     ? `<div class="effects" style="color:var(--accent); grid-column: span 4;">支度: ${escapeHtml(player.depthPrep.name)}</div>`
     : "";
+  const capInfo = player.mode === "endless"
+    ? `<div class="effects" style="color:var(--dim); grid-column: span 4;">鍛冶上限: +${forgeLimit()}${runStats && (runStats.legacyWeaponUsed || runStats.legacyArmorUsed) ? " / 遺品使用中" : ""}</div>`
+    : "";
 
   $statusGrid.innerHTML = `
     <span class="lbl">HP</span><span class="val" style="color:${hpColor}">${player.hp}/${player.max_hp}</span>
@@ -2224,6 +2383,7 @@ function renderStatus() {
     <div class="hp-bar"><div style="width:${hpRatio*100}%; background:${hpColor};"></div></div>
     ${me}
     ${prepInfo}
+    ${capInfo}
     ${mg}
     ${fx}
   `;
@@ -2590,6 +2750,11 @@ async function combat(m, canFlee = true) {
         <span class="vs">vs</span>
         <span style="color:${hpColor}">あなた ${player.hp}/${player.max_hp}</span>
       </div>`);
+    const demonCharge = !!(m.demonKingTelegraph && turn > 1 && turn % 4 === 0);
+    if (demonCharge) {
+      tell("魔王の残響が力を溜めている……次の一撃に備えろ！", "danger");
+      if (runStats) addRunStat("demonKingTelegraphUsed", 1, false);
+    }
 
     const opts = [
       { label: "攻撃" },
@@ -2694,8 +2859,13 @@ async function combat(m, canFlee = true) {
       tell(`${m.name} の攻撃は外れた！`);
     } else {
       let edmg = calcDamage(m.atk, pDef(player));
+      if (demonCharge) edmg = Math.max(1, Math.floor(edmg * 1.35));
       if (defending) {
         edmg = Math.max(1, Math.floor(edmg / 2));
+        if (demonCharge) {
+          edmg = Math.max(1, Math.floor(edmg * 0.70));
+          tell("防御が魔王の一撃を受け流した！", "shop");
+        }
         // 戦士成長「鉄壁」：Lv毎 -2
         if (player.cls === "戦士") {
           const tessei = growthLv("鉄壁");
@@ -3227,9 +3397,10 @@ function scrapForgeOption(slot, discount = 1) {
   if (cur >= limit) return { label: `${label}（+${cur}）`, desc: `上限 +${limit}`, disabled: true };
   const cost = scrapForgeCost(slot, discount);
   const scraps = scrapsForSlot(slot);
+  const req = scrapRequirementForNext(slot);
   return {
     label: `${label}  +${cur}→+${cur + 1}`,
-    desc: `${slot === "weapon" ? "武器片" : "防具片"}1 + ${cost}G（所持${scraps}）`,
+    desc: `${slot === "weapon" ? "武器片" : "防具片"}${req} + ${cost}G（所持${scraps}）`,
     disabled: !canScrapEnhance(slot, discount),
   };
 }
@@ -3252,7 +3423,7 @@ async function eventForge(discount = 1, title = "鍛冶屋", opts = {}) {
   const maxActions = Math.max(1, Math.floor(
     typeof opts.maxActions === "number"
       ? opts.maxActions
-      : (isEndlessMode() ? (discount < 1 ? 3 : 2) : 1)
+      : (isEndlessMode() ? (discount < 1 ? 3 : (player.floor >= 61 ? 3 : 2)) : 1)
   ));
   const body = discount < 1
     ? "煤けた炉がまだ熱を帯びている。通常より少し安く鍛えられそうだ。"
@@ -3916,12 +4087,13 @@ async function eventDepthMilestone() {
     await offerF40PrepChoice("✦ 40F挑戦前の準備");
     return;
   }
+  const forgeWeight = player.floor >= 61 ? 2 : 1;
   const events = [
-    eventDepthCampfire,
-    () => eventForge(0.8, "忘れられた鍛冶場", { maxActions: 3 }),
-    () => offerMinorDepthBlessing("記憶の分岐路"),
+    [eventDepthCampfire, 1],
+    [() => eventForge(0.8, "忘れられた鍛冶場", { maxActions: 3 }), forgeWeight],
+    [() => offerMinorDepthBlessing("記憶の分岐路"), 1],
   ];
-  await choice(events)();
+  await weightedChoice(events)();
 }
 // 節目イベントを発火すべき階か（メインループからの判定用）
 function isMilestoneFloor(f) {
@@ -3940,7 +4112,12 @@ const EVENTS_NORMAL = [
   [eventGamble,    4],
   [eventForge,      6],
 ];
-function pickEvent() { return weightedChoice(EVENTS_NORMAL); }
+function pickEvent() {
+  if (!isEndlessMode()) return weightedChoice(EVENTS_NORMAL);
+  const f = player.floor || 21;
+  const forgeBonus = f >= 61 ? 4 : f >= 41 ? 2 : 0;
+  return weightedChoice(EVENTS_NORMAL.map(([fn, w]) => [fn, fn === eventForge ? w + forgeBonus : w]));
+}
 
 async function eventBoss() {
   const isEndless = isEndlessMode();
@@ -3957,11 +4134,12 @@ async function eventBoss() {
     runStats.currentBossFloor = player.floor;
     runStats.bossHp = m.hp;
     runStats.bossAtk = m.atk;
-    runStats.currentBossBreakpointTuned = !!(m.bossBreakpointTuned || m.f35BossTuned || m.f40BossTuned || m.f60BossTuned);
+    runStats.currentBossBreakpointTuned = !!(m.bossBreakpointTuned || m.demonKingTuned || m.f35BossTuned || m.f40BossTuned || m.f60BossTuned || m.f80BossTuned);
     if (m.bossBreakpointTuned) runStats.bossBreakpointTuned = true;
     if (m.f35BossTuned) runStats.f35BossTuned = true;
     if (m.f40BossTuned) runStats.f40BossTuned = true;
     if (m.f60BossTuned) runStats.f60BossTuned = true;
+    if (m.f80BossTuned) runStats.f80BossTuned = true;
   }
   const headline = isEndless ? `☠ B${player.floor}F 深層ボス：${m.name}` : `☠ B${player.floor}F ボス：${m.name}`;
   tellEvent(headline, `${m.flavor}\n\n──── これより先、逃げる事は叶わない。`, "boss");
@@ -4660,6 +4838,8 @@ async function showRecords() {
       <tr><td>所持欠片</td><td>${meta.shards}</td></tr>
       <tr><td>累計獲得</td><td>${meta.totalShards}</td></tr>
       <tr><td>深層の心得</td><td>${escapeHtml(depthPassivesSummary(meta) || "なし")}</td></tr>
+      <tr><td>遺品武器</td><td>${escapeHtml(legacyLabel(meta.depthLegacyWeapon))}</td></tr>
+      <tr><td>遺品防具</td><td>${escapeHtml(legacyLabel(meta.depthLegacyArmor))}</td></tr>
     </table>`;
   if (r.lastResult) {
     const lr = r.lastResult;
@@ -4705,6 +4885,9 @@ async function showRecords() {
     const blessRow = (er.blessingChoices && er.blessingChoices.length) ? `<tr><td>祝福</td><td>${er.blessingChoices.map(b => escapeHtml(b.name)).join(" / ")}</td></tr>` : "";
     const forgeRow = `<tr><td>鍛冶</td><td>武器${er.forgeWeaponCount || 0} / 防具${er.forgeArmorCount || 0} / ${er.forgeGoldSpent || 0}G</td></tr>`;
     const prepRow = er.depthPrep ? `<tr><td>深層支度</td><td>${escapeHtml(er.depthPrep.name || er.depthPrep.id)}（${er.depthPrepShardsSpent || 0}欠片）</td></tr>` : "";
+    const legacyRow = (er.legacyWeaponUsed || er.legacyArmorUsed || er.legacyWeaponRegistered || er.legacyArmorRegistered)
+      ? `<tr><td>遺品</td><td>${er.legacyWeaponUsed ? `武器使用:${escapeHtml(er.legacyWeaponName || "")}(${er.legacyWeaponCost || 0}) ` : ""}${er.legacyArmorUsed ? `防具使用:${escapeHtml(er.legacyArmorName || "")}(${er.legacyArmorCost || 0}) ` : ""}${er.legacyWeaponRegistered ? "武器登録 " : ""}${er.legacyArmorRegistered ? "防具登録" : ""}</td></tr>`
+      : "";
     const passiveRow = (er.depthPassiveTriggers || 0) > 0 ? `<tr><td>深層心得</td><td>${er.depthPassiveTriggers}回発動</td></tr>` : "";
     const miniRow = er.miniGoal ? `<tr><td>ミニ目標</td><td>${escapeHtml(er.miniGoal.text)} ${er.miniGoal.completed ? "達成" : "未達成"}</td></tr>` : "";
     const evalRow = er.evaluation ? `<tr><td>評価</td><td>${escapeHtml(er.evaluation)}</td></tr>` : "";
@@ -4720,6 +4903,7 @@ async function showRecords() {
         ${blessRow}
         ${forgeRow}
         ${prepRow}
+        ${legacyRow}
         ${passiveRow}
         ${miniRow}
         ${evalRow}
@@ -5051,6 +5235,21 @@ function buildRunSummary(kind, score, reason) {
     finalDepthCampUsed: !!(runStats.finalDepthCampUsed),
     finalDepthCampChoice: runStats.finalDepthCampChoice || "",
     forgeVisitActions: runStats.forgeVisitActions || 0,
+    legacyWeapon: legacyLabel(loadMeta().depthLegacyWeapon),
+    legacyArmor: legacyLabel(loadMeta().depthLegacyArmor),
+    legacyWeaponUsed: !!(runStats.legacyWeaponUsed),
+    legacyArmorUsed: !!(runStats.legacyArmorUsed),
+    legacyWeaponCost: runStats.legacyWeaponCost || 0,
+    legacyArmorCost: runStats.legacyArmorCost || 0,
+    legacyWeaponRegistered: !!(runStats.legacyWeaponRegistered),
+    legacyArmorRegistered: !!(runStats.legacyArmorRegistered),
+    legacyWeaponName: runStats.legacyWeaponName || "",
+    legacyArmorName: runStats.legacyArmorName || "",
+    currentEnhanceCap: forgeLimit(),
+    maxEnhanceCapReached: runStats.maxEnhanceCapReached || forgeLimit(),
+    f80BossTuned: !!(runStats.f80BossTuned),
+    demonKingTuning: runStats.demonKingTuning || null,
+    demonKingTelegraphUsed: runStats.demonKingTelegraphUsed || 0,
     reason,
     date: new Date().toISOString(),
   };
@@ -5186,6 +5385,7 @@ function buildEndCard(kind, reason) {
     ? `<h3>鍛冶記録</h3><table>
         <tr><td>強化回数</td><td>武器 ${runStats.forgeWeaponCount || 0} / 防具 ${runStats.forgeArmorCount || 0}</td></tr>
         <tr><td>使用GOLD</td><td>${runStats.forgeGoldSpent || 0}G</td></tr>
+        <tr><td>到達上限</td><td>+${runStats.maxEnhanceCapReached || forgeLimit()}</td></tr>
       </table>`
     : "";
   const scrapAny = (runStats.gearDismantled || 0) > 0
@@ -5215,6 +5415,15 @@ function buildEndCard(kind, reason) {
     ? `<h3>40F前準備</h3><table>
         ${runStats.depthPrepEventUsed ? `<tr><td>B36支度場</td><td>${runStats.depthPrepEventShardsSpent || 0} 欠片</td></tr>` : ""}
         ${runStats.finalDepthCampUsed ? `<tr><td>B39支度場</td><td>${escapeHtml(finalDepthCampChoiceLabel(runStats.finalDepthCampChoice))}</td></tr>` : ""}
+      </table>`
+    : "";
+  const legacyAny = isEndless && (runStats.legacyWeaponUsed || runStats.legacyArmorUsed || runStats.legacyWeaponRegistered || runStats.legacyArmorRegistered);
+  const legacyBlock = legacyAny
+    ? `<h3>深層遺品</h3><table>
+        ${runStats.legacyWeaponUsed ? `<tr><td>武器持込</td><td>${escapeHtml(runStats.legacyWeaponName || "遺品")} / ${runStats.legacyWeaponCost || 0}欠片</td></tr>` : ""}
+        ${runStats.legacyArmorUsed ? `<tr><td>防具持込</td><td>${escapeHtml(runStats.legacyArmorName || "遺品")} / ${runStats.legacyArmorCost || 0}欠片</td></tr>` : ""}
+        ${runStats.legacyWeaponRegistered ? `<tr><td>武器登録</td><td>${escapeHtml(legacyLabel(loadMeta().depthLegacyWeapon))}</td></tr>` : ""}
+        ${runStats.legacyArmorRegistered ? `<tr><td>防具登録</td><td>${escapeHtml(legacyLabel(loadMeta().depthLegacyArmor))}</td></tr>` : ""}
       </table>`
     : "";
   const depthPassiveBlock = isEndless && ((runStats.depthPassiveTriggers || 0) > 0 || (runStats.depthExtraScrapsGained || 0) > 0)
@@ -5267,6 +5476,7 @@ function buildEndCard(kind, reason) {
     ${blessingBlock}
     ${forgeBlock}
     ${depthStartGearBlock}
+    ${legacyBlock}
     ${depthPrepBlock}
     ${depthPrepEventBlock}
     ${scrapBlock}
@@ -5370,6 +5580,75 @@ async function ending() {
   throw new Error("__GAMECLEAR__");
 }
 
+function makeLegacyFromCurrent(slot) {
+  if (!player || player.mode !== "endless") return null;
+  const name = slot === "weapon" ? player.weapon : player.armor;
+  if (!name || !ITEMS[name] || ITEMS[name].category !== slot) return null;
+  const enhance = compressLegacyEnhance(slot === "weapon" ? player.weaponEnhance : player.armorEnhance);
+  return {
+    name,
+    enhance,
+    sourceFloor: player.floor || 0,
+    registeredAt: new Date().toISOString(),
+  };
+}
+async function confirmLegacyOverwrite(slot, legacy) {
+  const meta = loadMeta();
+  const old = slot === "weapon" ? meta.depthLegacyWeapon : meta.depthLegacyArmor;
+  if (!old) return true;
+  const kind = slot === "weapon" ? "武器" : "防具";
+  tellEvent("遺品の上書き", `${kind}遺品 ${legacyLabel(old)} を ${legacyLabel(legacy)} で上書きする？`, "danger");
+  const idx = await ask([{ label: "上書きする" }, { label: "やめる" }]);
+  return idx === 0;
+}
+async function registerLegacyGear(slot) {
+  const legacy = makeLegacyFromCurrent(slot);
+  if (!legacy) return false;
+  const ok = await confirmLegacyOverwrite(slot, legacy);
+  if (!ok) return false;
+  const meta = loadMeta();
+  if (slot === "weapon") {
+    meta.depthLegacyWeapon = legacy;
+    if (runStats) {
+      runStats.legacyWeaponRegistered = true;
+      runStats.legacyWeaponName = legacy.name;
+    }
+  } else {
+    meta.depthLegacyArmor = legacy;
+    if (runStats) {
+      runStats.legacyArmorRegistered = true;
+      runStats.legacyArmorName = legacy.name;
+    }
+  }
+  saveMeta(meta);
+  const kind = slot === "weapon" ? "武器" : "防具";
+  tell(`${kind}遺品として ${legacyLabel(legacy)} を登録した。覚醒は持ち越されない。`, "gold");
+  return true;
+}
+async function offerLegacyGearRegistration() {
+  if (!player || !runStats || player.mode !== "endless" || player.floor < 40) return;
+  const weaponLegacy = makeLegacyFromCurrent("weapon");
+  const armorLegacy = makeLegacyFromCurrent("armor");
+  if (!weaponLegacy && !armorLegacy) return;
+  tellEvent("深層遺品", "B40F以深の成果を、次回深層用の遺品として1枠ずつ残せる。強化値は圧縮され、覚醒は失われる。", "shop");
+  const opts = [
+    { id: "weapon", label: "武器登録", desc: weaponLegacy ? legacyLabel(weaponLegacy) : "武器なし", disabled: !weaponLegacy },
+    { id: "armor", label: "防具登録", desc: armorLegacy ? legacyLabel(armorLegacy) : "防具なし", disabled: !armorLegacy },
+    { id: "both", label: "両方登録", desc: "武器と防具を登録", disabled: !weaponLegacy && !armorLegacy },
+    { id: "none", label: "登録しない" },
+  ];
+  const idx = await ask(opts.map(o => ({ label: o.label, desc: o.desc, disabled: o.disabled })));
+  const id = opts[idx] && opts[idx].id;
+  if (id === "weapon") await registerLegacyGear("weapon");
+  else if (id === "armor") await registerLegacyGear("armor");
+  else if (id === "both") {
+    if (weaponLegacy) await registerLegacyGear("weapon");
+    if (armorLegacy) await registerLegacyGear("armor");
+  } else {
+    tell("遺品は登録しなかった。", "dim");
+  }
+}
+
 async function gameOver() {
   // 死亡時：これまで稼いだ欠片を確定でメタへ反映（クリアボーナスは無し）
   addShards(runStats ? (runStats.earnedShards || 0) : 0);
@@ -5377,6 +5656,7 @@ async function gameOver() {
   const reason = runStats && runStats.lastDamageSource
     ? `${runStats.lastDamageSource} に倒された。`
     : `力尽きた。`;
+  await offerLegacyGearRegistration();
   recordRunResult("loss", computeScore("loss"), reason);
   clearSave();
   wipeMemoryMerchant();
@@ -5425,6 +5705,7 @@ function initDebugBar() {
       <button data-floor="40">40</button>
       <button data-floor="45">45</button>
       <button data-floor="60">60</button>
+      <button data-floor="80">80</button>
     </div>
     <button id="dbg-gold">+100G</button>
     <button id="dbg-shards">欠片+10</button>
@@ -5446,6 +5727,7 @@ function initDebugBar() {
     <button id="dbg-elite" class="dbg-warn">⇒次戦闘をエリート化</button>
     <button id="dbg-mem-add">記憶効果を1つ付与</button>
     <button id="dbg-mem-clr">記憶効果クリア</button>
+    <button id="dbg-legacy-clear">遺品クリア</button>
     <button id="dbg-loot"  class="dbg-warn">エリート戦利品3択</button>
     <button id="dbg-status">ステータス出力</button>
   `;
@@ -5550,6 +5832,13 @@ function initDebugBar() {
     renderStatus();
     dlog("記憶効果をクリア");
   };
+  document.getElementById("dbg-legacy-clear").onclick = () => {
+    const meta = loadMeta();
+    meta.depthLegacyWeapon = null;
+    meta.depthLegacyArmor = null;
+    saveMeta(meta);
+    dlog("深層遺品をクリア");
+  };
   document.getElementById("dbg-loot").onclick = () => {
     window.__debugQueueEvent = "loot";
     dlog("次イベントをエリート戦利品3択に置換予約");
@@ -5565,10 +5854,12 @@ function initDebugBar() {
       awaken: `武器★${player.weaponAwaken || 0}/防具★${player.armorAwaken || 0}`,
       prep: player.depthPrep ? player.depthPrep.name : "なし",
       passives: depthPassivesSummary(loadMeta()) || "なし",
+      legacyMeta: `${legacyLabel(loadMeta().depthLegacyWeapon)} / ${legacyLabel(loadMeta().depthLegacyArmor)}`,
       startGear: runStats ? `${runStats.depthStartWeapon || "?"}/${runStats.depthStartArmor || "?"}` : "—",
       prep36: runStats ? `${!!runStats.depthPrepEventUsed} shards=${runStats.depthPrepEventShardsSpent || 0}` : "—",
       camp39: runStats ? `${!!runStats.finalDepthCampUsed} ${runStats.finalDepthCampChoice || ""}` : "—",
       forgeVisitActions: runStats ? (runStats.forgeVisitActions || 0) : 0,
+      cap: forgeLimit(),
       kills: runStats ? runStats.kills : 0,
       depthBoss: runStats ? runStats.depthBossKills : 0,
       blessings: runStats ? (runStats.blessingChoices || []).length : 0,
@@ -5585,7 +5876,8 @@ function initDebugBar() {
     dlog(`武=${dump.weapon} 防=${dump.armor} 撃破${dump.kills} 深層B${dump.depthBoss} 祝福${dump.blessings}`);
     dlog(`素材=${dump.scraps} 覚醒=${dump.awaken}`);
     dlog(`支度=${dump.prep} 深層心得=${dump.passives}`);
-    dlog(`開始装備=${dump.startGear} B36=${dump.prep36} B39=${dump.camp39} 鍛冶行動=${dump.forgeVisitActions}`);
+    dlog(`開始装備=${dump.startGear} 上限+${dump.cap} B36=${dump.prep36} B39=${dump.camp39} 鍛冶行動=${dump.forgeVisitActions}`);
+    dlog(`登録遺品=${dump.legacyMeta}`);
     dlog(`記憶=${dump.memories} エリート=${dump.elite}`);
     dlog(`直近ボス=${dump.boss}`);
     if (dump.support) dlog(`深層補助=${dump.support}`);
@@ -5619,11 +5911,11 @@ async function gameLoop() {
               await offerF40PrepChoice("✦ 40F挑戦前の準備");
             } else {
               const fns = [
-                eventDepthCampfire,
-                () => eventForge(0.8, "忘れられた鍛冶場", { maxActions: 3 }),
-                () => offerMinorDepthBlessing("記憶の分岐路"),
+                [eventDepthCampfire, 1],
+                [() => eventForge(0.8, "忘れられた鍛冶場", { maxActions: 3 }), player.floor >= 61 ? 2 : 1],
+                [() => offerMinorDepthBlessing("記憶の分岐路"), 1],
               ];
-              await fns[Math.floor(Math.random() * fns.length)]();
+              await weightedChoice(fns)();
             }
           } else if (ev === "loot") {
             // ガードを無視してエリート戦利品3択を強制呼出（plus6 デバッグ）
